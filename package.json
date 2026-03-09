@@ -1,0 +1,14 @@
+{
+  "name": "smartfarm-multiplayer",
+  "version": "2.0.0",
+  "description": "SmartFarm 3D - Multiplayer IoT Farming Game",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4"
+  }
+}
