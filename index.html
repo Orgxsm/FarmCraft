@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SmartFarm 3D - IoT Farming</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -109,6 +109,80 @@ canvas{display:block}
 .coverage-indicator{position:fixed;top:8px;left:14px;z-index:10;color:#fff;font-size:12px;opacity:.6;background:rgba(0,0,0,0.4);padding:3px 10px;border-radius:10px;display:flex;align-items:center;gap:5px}
 .coverage-indicator .bars{display:flex;gap:2px;align-items:flex-end}
 .coverage-indicator .bar{width:4px;background:#00ff88;border-radius:1px}
+
+/* ─── Mobile hint ─── */
+#mobile-hint{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:12;color:#fff;font-size:12px;opacity:.6;background:rgba(0,0,0,0.5);padding:6px 14px;border-radius:16px;backdrop-filter:blur(8px);white-space:nowrap;pointer-events:none;animation:hintFade 4s ease-out forwards}
+@keyframes hintFade{0%,60%{opacity:.6}100%{opacity:0}}
+
+/* ─── Mobile Responsive ─── */
+@media(max-width:768px){
+  #hud{gap:3px;padding:6px 6px;flex-wrap:wrap}
+  .resource{font-size:11px;padding:3px 8px;gap:3px;border-radius:14px}
+  .resource .icon{font-size:13px}
+  .resource .val{min-width:16px}
+
+  #build-menu{gap:4px;padding:8px 6px 10px;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;justify-content:flex-start;scrollbar-width:none;max-height:none}
+  #build-menu::-webkit-scrollbar{display:none}
+  .build-btn{min-width:72px;padding:7px 8px;border-radius:10px;flex-shrink:0}
+  .build-btn .b-icon{font-size:18px}
+  .build-btn .b-name{font-size:9px;margin:2px 0 1px}
+  .build-btn .b-cost{font-size:8px}
+  .build-btn:hover:not(.locked):not(.built){transform:none}
+
+  #tab-bar .tab-btn{padding:8px 12px;font-size:11px}
+
+  #intro h1{font-size:34px}
+  #intro .sub{font-size:12px;margin-bottom:14px;letter-spacing:2px}
+  #intro p{font-size:12px;max-width:320px;margin-bottom:20px;padding:0 16px}
+  #intro button{padding:12px 34px;font-size:15px}
+
+  #win-screen h1{font-size:34px}
+
+  #messages{top:44px}
+  .msg{font-size:11px;padding:5px 12px}
+
+  #day-indicator{font-size:10px;top:5px;right:6px;padding:2px 8px}
+  .coverage-indicator{font-size:10px;top:5px;left:6px;padding:2px 8px}
+
+  #tooltip{display:none!important}
+
+  #dashboard{left:5px;right:5px;width:auto;top:44px;bottom:70px;padding:12px}
+  #dashboard h3{font-size:13px}
+  .log-console{font-size:9px;max-height:120px}
+
+  #tech-panel{right:5px;left:5px;width:auto;top:44px;bottom:70px;padding:12px}
+  #tech-panel h3{font-size:13px}
+  .tech-node{font-size:10px;padding:4px 6px}
+
+  #mobile-hint{display:block}
+}
+
+@media(max-width:480px){
+  #hud{gap:2px;padding:4px 4px}
+  .resource{font-size:10px;padding:2px 6px}
+  .resource .icon{font-size:11px}
+  .build-btn{min-width:62px;padding:5px 6px}
+  .build-btn .b-icon{font-size:16px}
+  .build-btn .b-name{font-size:8px}
+  .build-btn .b-cost{font-size:7px}
+  #tab-bar .tab-btn{padding:6px 8px;font-size:10px}
+  #intro h1{font-size:26px}
+  #intro .sub{font-size:10px}
+  #intro p{font-size:11px;max-width:260px}
+  #intro button{padding:10px 28px;font-size:14px}
+}
+
+@media(max-height:500px) and (orientation:landscape){
+  #hud{padding:3px 6px;gap:3px}
+  .resource{font-size:10px;padding:2px 6px}
+  #build-menu{padding:4px 6px 6px}
+  .build-btn{min-width:58px;padding:5px 6px}
+  .build-btn .b-icon{font-size:16px}
+  .build-btn .b-name{font-size:8px}
+  #tab-bar .tab-btn{padding:6px 10px;font-size:10px}
+  #messages{top:32px}
+  #dashboard,#tech-panel{top:32px;bottom:60px}
+}
 </style>
 </head>
 <body>
@@ -142,6 +216,7 @@ canvas{display:block}
 <div id="messages"></div>
 <div id="build-menu"></div>
 <div id="tooltip"></div>
+<div id="mobile-hint">Touche les arbres et rochers pour recolter</div>
 <div id="dashboard"></div>
 <div id="tech-panel"></div>
 

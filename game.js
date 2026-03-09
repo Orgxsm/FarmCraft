@@ -11,6 +11,7 @@ const lerp = (a,b,t) => a+(b-a)*t;
 const rand = (a,b) => Math.random()*(b-a)+a;
 const randInt = (a,b) => Math.floor(rand(a,b+1));
 const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.innerWidth<=768 && 'ontouchstart' in window);
 
 // ═══════════════════════════════════════
 // GAME STATE
@@ -139,13 +140,13 @@ let networkCoverage = 0;
 // ═══════════════════════════════════════
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 800);
-camera.position.set(35, 28, 35);
+camera.position.set(isMobile?40:35, isMobile?32:28, isMobile?40:35);
 
-const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias:!isMobile, powerPreference:'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile?1.5:2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = isMobile?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -153,16 +154,17 @@ document.body.appendChild(renderer.domElement);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.25, 0.5, 0.85);
-composer.addPass(bloomPass);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), isMobile?0.12:0.25, 0.5, 0.85);
+if(!isMobile) composer.addPass(bloomPass);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.maxPolarAngle = Math.PI / 2.15;
-controls.minDistance = 8;
-controls.maxDistance = 80;
+controls.minDistance = isMobile?14:8;
+controls.maxDistance = isMobile?60:80;
 controls.target.set(0, 0, 0);
+if(isMobile){controls.rotateSpeed=0.5;controls.zoomSpeed=0.8;controls.enablePan=true;controls.panSpeed=0.8;controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN}}
 
 // ═══════════════════════════════════════
 // LIGHTING
@@ -172,7 +174,7 @@ scene.add(ambientLight);
 const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.8);
 sunLight.position.set(25, 35, 20);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(4096, 4096);
+sunLight.shadow.mapSize.set(isMobile?2048:4096, isMobile?2048:4096);
 sunLight.shadow.camera.left = -50;
 sunLight.shadow.camera.right = 50;
 sunLight.shadow.camera.top = 50;
@@ -1249,7 +1251,8 @@ function onPointerDown(e) {
       h.mesh.position.x+=rand(-0.3,0.3);
       setTimeout(()=>{if(h.mesh.parent)h.mesh.position.copy(orig)},120);
       // Debris
-      for(let p=0;p<4;p++){
+      const _pc=isMobile?2:4;
+      for(let p=0;p<_pc;p++){
         const pm=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05),new THREE.MeshStandardMaterial({color:h.type==='tree'?0x8B5E3C:0x888}));
         pm.position.copy(intersects[0].point);scene.add(pm);
         particles.push({mesh:pm,type:'debris',vel:new THREE.Vector3(rand(-2,2),rand(1,4),rand(-2,2)),life:rand(0.5,1.2),maxLife:1.2});
@@ -1273,6 +1276,16 @@ function onPointerDown(e) {
   }
 }
 renderer.domElement.addEventListener('pointerdown',onPointerDown);
+
+// Mobile touch: distinguish tap from drag/pan
+if(isMobile){
+  renderer.domElement.addEventListener('touchstart',(e)=>{if(e.touches.length===1)e.preventDefault()},{passive:false});
+  let _ts=null,_tm=false;
+  renderer.domElement.addEventListener('touchstart',(e)=>{if(e.touches.length===1){_ts={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};_tm=false}});
+  renderer.domElement.addEventListener('touchmove',(e)=>{if(_ts&&e.touches.length===1){const dx=e.touches[0].clientX-_ts.x,dy=e.touches[0].clientY-_ts.y;if(Math.sqrt(dx*dx+dy*dy)>15)_tm=true}});
+  renderer.domElement.addEventListener('touchend',()=>{if(_ts&&!_tm&&Date.now()-_ts.t<300){onPointerDown({clientX:_ts.x,clientY:_ts.y,preventDefault:()=>{}})}_ts=null});
+  document.addEventListener('contextmenu',(e)=>e.preventDefault());
+}
 
 // Tooltip
 renderer.domElement.addEventListener('pointermove',(e)=>{
@@ -1531,14 +1544,21 @@ window.startGame = function(){
   updateHUD();
   addLog('🌱 Bienvenue dans SmartFarm!','info');
   addLog('📋 Objectif: construis et optimise ta ferme','info');
-  showMessage('Recolte bois et pierre pour commencer!','#66bb6a');
-  setTimeout(()=>showMessage('Construis ta cabane en premier!','#FFD54F'),3500);
+  if(isMobile){
+    showMessage('Touche les arbres et rochers pour recolter!','#66bb6a');
+    setTimeout(()=>showMessage('Construis ta cabane en premier!','#FFD54F'),3500);
+    setTimeout(()=>{const h=document.getElementById('mobile-hint');if(h)h.remove()},5000);
+  } else {
+    showMessage('Recolte bois et pierre pour commencer!','#66bb6a');
+    setTimeout(()=>showMessage('Construis ta cabane en premier!','#FFD54F'),3500);
+  }
 };
 
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight);
 });
+if(isMobile){window.addEventListener('orientationchange',()=>{setTimeout(()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)},200)})}
 
 window.addEventListener('keydown',(e)=>{
   if(e.key==='Escape'){selectedBuilding=null;selectedIoT=null;removeGhost();renderBuildMenu()}
