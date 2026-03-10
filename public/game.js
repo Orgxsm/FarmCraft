@@ -1433,8 +1433,8 @@ socket.on('joined', (data) => {
       spawnHarvestableMesh(h);
     }
 
-    // Spawn player character
-    const sp = data.player.spawn;
+    // Spawn player character (use saved position if restored, otherwise spawn point)
+    const sp = (data.restored && data.player.position) ? data.player.position : data.player.spawn;
     playerPos.set(sp.x, getY(sp.x, sp.z), sp.z);
     playerCharacter = createPlayerCharacter(myPlayer.color, myPlayer.name);
     playerCharacter.group.position.copy(playerPos);
@@ -1733,11 +1733,14 @@ function joinGame() {
 
 // Auto-rejoin on reconnect if we have a saved name
 if (savedName && socket) {
-  socket.on('connect', () => {
+  const autoJoin = () => {
     if (!gameStarted && savedName) {
       socket.emit('join', { name: savedName });
     }
-  });
+  };
+  socket.on('connect', autoJoin);
+  // If already connected, join immediately
+  if (socket.connected) autoJoin();
 }
 
 // Resize
