@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -24,6 +25,9 @@ const PRODUCTION_INTERVAL = 8; // seconds
 const HARVEST_RESPAWN_TIME = 12000; // ms
 const PLAYER_COLORS = ['#66bb6a','#42a5f5','#ff7043','#ab47bc','#ffca28','#26c6da','#ec407a','#8d6e63'];
 const MAX_PLAYERS = 8;
+const STATE_DIR = path.join(__dirname, 'data');
+const STATE_FILE = path.join(STATE_DIR, 'state.json');
+const SAVE_INTERVAL = 30000; // save every 30s
 
 // ═══════════════════════════════════════
 // BUILDING DEFINITIONS (shared)
@@ -49,8 +53,10 @@ const BUILDINGS = {
 const world = {
   players: {},        // socketId -> playerState
   harvestables: [],   // {id, type, treeType, x, z, hp, maxHp, resource, amount}
+  animals: [],        // {id, type, x, z, rot, targetX, targetZ, speed, moving}
   occupiedCells: new Set(), // "x,z" strings for collision
-  nextHarvestId: 0
+  nextHarvestId: 0,
+  nextAnimalId: 0
 };
 
 // Spawn positions for players (spread around the map)
@@ -65,9 +71,9 @@ const SPAWN_POINTS = [
   { x: -60, z: 0 }
 ];
 
-// Saved sessions: name -> player state (persists across disconnects)
+// Saved sessions: name -> player state (persists across disconnects AND restarts)
 const savedSessions = {};
-const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 min before session expires
+const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24h (longer since we persist to disk)
 const sessionTimers = {};
 
 function createPlayerState(id, name, spawnIndex) {
@@ -80,14 +86,86 @@ function createPlayerState(id, name, spawnIndex) {
     spawn,
     resources: { wood: 0, stone: 0, water: 0, food: 0, energy: 0, gold: 0, data: 0 },
     buildings: {}, // buildingId -> {type, built, x, z, health}
-    buildingCounter: 0, // auto-increment for unique IDs
-    unlockedBuildings: ['cabin'], // prerequisite chain
+    buildingCounter: 0,
+    unlockedBuildings: ['cabin'],
     installedSensors: {},
     unlockedTech: [],
     productionTimers: {},
     position: { x: spawn.x, z: spawn.z },
     rotation: 0
   };
+}
+
+// ═══════════════════════════════════════
+// STATE PERSISTENCE
+// ═══════════════════════════════════════
+function saveState() {
+  try {
+    if (!fs.existsSync(STATE_DIR)) fs.mkdirSync(STATE_DIR, { recursive: true });
+    const state = {
+      harvestables: world.harvestables,
+      nextHarvestId: world.nextHarvestId,
+      animals: world.animals.map(a => ({ id: a.id, type: a.type, x: a.x, z: a.z, rot: a.rot })),
+      nextAnimalId: world.nextAnimalId,
+      savedSessions: { ...savedSessions },
+      // Also save currently connected players as sessions
+      connectedPlayers: {}
+    };
+    // Save connected players too so they survive restarts
+    for (const [sid, player] of Object.entries(world.players)) {
+      state.connectedPlayers[player.name] = { ...player };
+    }
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state));
+    console.log(`State saved (${Object.keys(state.savedSessions).length} sessions, ${Object.keys(state.connectedPlayers).length} active players, ${world.animals.length} animals)`);
+  } catch (e) {
+    console.error('Failed to save state:', e.message);
+  }
+}
+
+function loadState() {
+  try {
+    if (!fs.existsSync(STATE_FILE)) return false;
+    const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+
+    // Restore harvestables
+    if (data.harvestables && data.harvestables.length > 0) {
+      world.harvestables = data.harvestables;
+      world.nextHarvestId = data.nextHarvestId || 0;
+    } else {
+      return false; // no valid state, generate fresh
+    }
+
+    // Restore animals
+    if (data.animals && data.animals.length > 0) {
+      world.nextAnimalId = data.nextAnimalId || 0;
+      for (const a of data.animals) {
+        const animal = createAnimal(a.type, a.x, a.z, a.id);
+        animal.rot = a.rot || 0;
+        world.animals.push(animal);
+      }
+    }
+
+    // Restore saved sessions
+    if (data.savedSessions) {
+      for (const [name, session] of Object.entries(data.savedSessions)) {
+        savedSessions[name] = session;
+      }
+    }
+    // Restore connected players as saved sessions (they were connected when server stopped)
+    if (data.connectedPlayers) {
+      for (const [name, session] of Object.entries(data.connectedPlayers)) {
+        if (!savedSessions[name]) {
+          savedSessions[name] = session;
+        }
+      }
+    }
+
+    console.log(`State loaded: ${world.harvestables.length} harvestables, ${world.animals.length} animals, ${Object.keys(savedSessions).length} saved sessions`);
+    return true;
+  } catch (e) {
+    console.error('Failed to load state:', e.message);
+    return false;
+  }
 }
 
 // ═══════════════════════════════════════
@@ -131,6 +209,89 @@ function respawnHarvestable(type) {
   world.harvestables.push(h);
   io.emit('harvestableSpawned', h);
 }
+
+// ═══════════════════════════════════════
+// ANIMALS
+// ═══════════════════════════════════════
+function createAnimal(type, x, z, id) {
+  const speeds = { chicken: 2.5, cow: 1.2, pig: 1.8 };
+  return {
+    id: id !== undefined ? id : world.nextAnimalId++,
+    type,
+    x: x !== undefined ? x : (Math.random() - 0.5) * (MAP_SIZE - 40),
+    z: z !== undefined ? z : (Math.random() - 0.5) * (MAP_SIZE - 40),
+    rot: Math.random() * Math.PI * 2,
+    targetX: 0,
+    targetZ: 0,
+    speed: speeds[type] || 1.5,
+    moving: false,
+    waitTimer: 0
+  };
+}
+
+function spawnAnimals() {
+  world.animals = [];
+  world.nextAnimalId = 0;
+  for (let i = 0; i < 10; i++) world.animals.push(createAnimal('chicken'));
+  for (let i = 0; i < 6; i++) world.animals.push(createAnimal('cow'));
+  for (let i = 0; i < 6; i++) world.animals.push(createAnimal('pig'));
+  // Set initial targets
+  world.animals.forEach(a => setNewAnimalTarget(a));
+}
+
+function setNewAnimalTarget(animal) {
+  const range = 20;
+  animal.targetX = animal.x + (Math.random() - 0.5) * range;
+  animal.targetZ = animal.z + (Math.random() - 0.5) * range;
+  const half = MAP_SIZE / 2 - 10;
+  animal.targetX = Math.max(-half, Math.min(half, animal.targetX));
+  animal.targetZ = Math.max(-half, Math.min(half, animal.targetZ));
+  animal.moving = true;
+}
+
+function updateAnimals(dt) {
+  for (const animal of world.animals) {
+    if (animal.waitTimer > 0) {
+      animal.waitTimer -= dt;
+      animal.moving = false;
+      continue;
+    }
+
+    const dx = animal.targetX - animal.x;
+    const dz = animal.targetZ - animal.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist < 0.5) {
+      animal.moving = false;
+      // Wait 2-6 seconds then pick new target
+      animal.waitTimer = 2 + Math.random() * 4;
+      setNewAnimalTarget(animal);
+    } else {
+      animal.moving = true;
+      const step = animal.speed * dt;
+      animal.x += (dx / dist) * step;
+      animal.z += (dz / dist) * step;
+      animal.rot = Math.atan2(dx, dz);
+    }
+  }
+}
+
+// Update animals at ~20Hz
+let lastAnimalUpdate = Date.now();
+setInterval(() => {
+  const now = Date.now();
+  const dt = (now - lastAnimalUpdate) / 1000;
+  lastAnimalUpdate = now;
+  updateAnimals(dt);
+}, 50);
+
+// Broadcast animal positions at 4Hz
+setInterval(() => {
+  if (Object.keys(world.players).length === 0) return;
+  io.emit('animalsUpdate', world.animals.map(a => ({
+    id: a.id, type: a.type, x: a.x, z: a.z, rot: a.rot, moving: a.moving
+  })));
+}, 250);
 
 // ═══════════════════════════════════════
 // GRID & COLLISION
@@ -279,6 +440,7 @@ io.on('connection', (socket) => {
       player,
       players: getPlayersPublic(),
       harvestables: world.harvestables,
+      animals: world.animals.map(a => ({ id: a.id, type: a.type, x: a.x, z: a.z, rot: a.rot, moving: a.moving })),
       mapSize: MAP_SIZE,
       gridSize: GRID_SIZE,
       buildings: BUILDINGS,
@@ -434,7 +596,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const player = world.players[socket.id];
     if (player) {
-      console.log(`${player.name} disconnected — session saved for 30min`);
+      console.log(`${player.name} disconnected — session saved`);
       // Free occupied cells temporarily
       for (const [bid, bdata] of Object.entries(player.buildings)) {
         if (bdata.built) {
@@ -456,6 +618,9 @@ io.on('connection', (socket) => {
 
       delete world.players[socket.id];
       io.emit('playerLeft', { playerId: socket.id, playerName: player.name });
+
+      // Save state after disconnect
+      saveState();
     }
   });
 });
@@ -488,10 +653,35 @@ function getPlayersPublic() {
 // ═══════════════════════════════════════
 // INIT & START
 // ═══════════════════════════════════════
-spawnHarvestables();
+
+// Try to load saved state, otherwise generate fresh
+const loaded = loadState();
+if (!loaded) {
+  console.log('No saved state found, generating fresh world...');
+  spawnHarvestables();
+  spawnAnimals();
+} else {
+  // If animals weren't loaded (old save format), spawn them
+  if (world.animals.length === 0) {
+    spawnAnimals();
+  }
+}
+
+// Periodic state save
+setInterval(saveState, SAVE_INTERVAL);
+
+// Save state on shutdown
+function gracefulShutdown(signal) {
+  console.log(`\n${signal} received, saving state...`);
+  saveState();
+  process.exit(0);
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`SmartFarm Multiplayer server running on port ${PORT}`);
   console.log(`Map size: ${MAP_SIZE}x${MAP_SIZE}, Max players: ${MAX_PLAYERS}`);
+  console.log(`Animals: ${world.animals.length}, Harvestables: ${world.harvestables.length}`);
 });

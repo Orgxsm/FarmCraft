@@ -20,6 +20,10 @@ primary_region = 'cdg'
     hard_limit = 100
     soft_limit = 80
 
+[mounts]
+  source = "smartfarm_data"
+  destination = "/app/data"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'

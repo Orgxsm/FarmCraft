@@ -75,6 +75,7 @@ const otherBuiltMeshes = {}; // `${playerId}_${key}` -> mesh
 const harvestableMap = {}; // id -> {data, mesh}
 const particles = [];
 const animatedObjects = [];
+const worldAnimals = {}; // id -> {type, mesh, targetPos, targetRot, moving}
 
 // ── Player character state ──
 let playerCharacter = null; // {group, leftArm, rightArm, leftLeg, rightLeg, head, nameSprite}
@@ -686,6 +687,105 @@ const buildingCreators = {
 };
 
 // ═══════════════════════════════════════
+// WORLD ANIMALS (server-driven)
+// ═══════════════════════════════════════
+function createAnimalMesh(type) {
+  const g = new THREE.Group();
+  if (type === 'chicken') {
+    // Body
+    const bodyMat = new THREE.MeshStandardMaterial({color:0xF5F0E0, roughness:0.7, flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.22,7,7), bodyMat),{position:new THREE.Vector3(0,0.32,0),scale:new THREE.Vector3(1,0.85,1.2)}));
+    // Head
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.12,6,6), bodyMat),{position:new THREE.Vector3(0.2,0.48,0)}));
+    // Beak
+    g.add(setMesh(new THREE.Mesh(new THREE.ConeGeometry(0.035,0.1,4), new THREE.MeshStandardMaterial({color:0xFF8800,flatShading:true})),{position:new THREE.Vector3(0.32,0.46,0),rotation:new THREE.Euler(0,0,-1.57)}));
+    // Comb
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.04,0.08,0.06), new THREE.MeshStandardMaterial({color:0xFF2200,flatShading:true})),{position:new THREE.Vector3(0.2,0.58,0)}));
+    // Legs
+    const legMat = new THREE.MeshStandardMaterial({color:0xDD8800,flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.15,4), legMat),{position:new THREE.Vector3(0.02,0.1,0.06)}));
+    g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.15,4), legMat),{position:new THREE.Vector3(0.02,0.1,-0.06)}));
+    // Tail feathers
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.04,0.12,0.08), bodyMat),{position:new THREE.Vector3(-0.22,0.42,0),rotation:new THREE.Euler(0,0,0.5)}));
+    g._animType = 'chicken';
+  } else if (type === 'cow') {
+    // Body
+    const colors = [0xF5F0E0, 0x8B6D4B, 0x333333];
+    const bodyColor = colors[Math.floor(Math.random()*3)];
+    const bodyMat = new THREE.MeshStandardMaterial({color:bodyColor, roughness:0.7, flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.8,0.55,0.45), bodyMat),{position:new THREE.Vector3(0,0.55,0),castShadow:true}));
+    // Head
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.35,0.35,0.4), bodyMat),{position:new THREE.Vector3(0.5,0.65,0)}));
+    // Snout
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.15,0.12,0.2), new THREE.MeshStandardMaterial({color:0xFFCCBB,flatShading:true})),{position:new THREE.Vector3(0.68,0.58,0)}));
+    // Horns
+    const hornMat = new THREE.MeshStandardMaterial({color:0xEEDDCC,flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,4), hornMat),{position:new THREE.Vector3(0.48,0.85,0.12)}));
+    g.add(setMesh(new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,4), hornMat),{position:new THREE.Vector3(0.48,0.85,-0.12)}));
+    // Legs
+    for (const [dx,dz] of [[-0.25,-0.15],[0.25,-0.15],[-0.25,0.15],[0.25,0.15]]) {
+      g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.3,5), bodyMat),{position:new THREE.Vector3(dx,0.15,dz)}));
+    }
+    // Spots (if white cow)
+    if (bodyColor === 0xF5F0E0) {
+      const spotMat = new THREE.MeshStandardMaterial({color:0x333333,flatShading:true});
+      g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.08,5,5), spotMat),{position:new THREE.Vector3(0.1,0.75,0.22)}));
+      g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.06,5,5), spotMat),{position:new THREE.Vector3(-0.15,0.7,-0.2)}));
+    }
+    // Tail
+    g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.01,0.015,0.35,4), bodyMat),{position:new THREE.Vector3(-0.42,0.55,0),rotation:new THREE.Euler(0,0,0.8)}));
+    g._animType = 'cow';
+  } else if (type === 'pig') {
+    // Body
+    const bodyMat = new THREE.MeshStandardMaterial({color:0xFFB0B0, roughness:0.6, flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.32,7,7), bodyMat),{position:new THREE.Vector3(0,0.4,0),scale:new THREE.Vector3(1.2,0.9,0.9),castShadow:true}));
+    // Head
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.2,6,6), bodyMat),{position:new THREE.Vector3(0.35,0.45,0)}));
+    // Snout
+    const snoutMat = new THREE.MeshStandardMaterial({color:0xFF8888,flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.06,6), snoutMat),{position:new THREE.Vector3(0.5,0.42,0),rotation:new THREE.Euler(0,0,1.57)}));
+    // Nostrils (dark dots)
+    const dotMat = new THREE.MeshStandardMaterial({color:0x662222,flatShading:true});
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.015,4,4), dotMat),{position:new THREE.Vector3(0.54,0.44,0.03)}));
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.015,4,4), dotMat),{position:new THREE.Vector3(0.54,0.44,-0.03)}));
+    // Eyes
+    const eyeMat = new THREE.MeshStandardMaterial({color:0x222222});
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.025,5,5), eyeMat),{position:new THREE.Vector3(0.42,0.52,0.1)}));
+    g.add(setMesh(new THREE.Mesh(new THREE.SphereGeometry(0.025,5,5), eyeMat),{position:new THREE.Vector3(0.42,0.52,-0.1)}));
+    // Ears
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.1), bodyMat),{position:new THREE.Vector3(0.3,0.62,0.1),rotation:new THREE.Euler(0,0,0.3)}));
+    g.add(setMesh(new THREE.Mesh(new THREE.BoxGeometry(0.06,0.08,0.1), bodyMat),{position:new THREE.Vector3(0.3,0.62,-0.1),rotation:new THREE.Euler(0,0,0.3)}));
+    // Legs
+    for (const [dx,dz] of [[-0.15,-0.12],[0.15,-0.12],[-0.15,0.12],[0.15,0.12]]) {
+      g.add(setMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.035,0.2,5), bodyMat),{position:new THREE.Vector3(dx,0.1,dz)}));
+    }
+    // Curly tail
+    g.add(setMesh(new THREE.Mesh(new THREE.TorusGeometry(0.05,0.012,4,6,4), bodyMat),{position:new THREE.Vector3(-0.35,0.45,0),rotation:new THREE.Euler(1.57,0,0)}));
+    g._animType = 'pig';
+  }
+  // Shadow circle
+  const shadowMat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.15});
+  const shadowSize = type === 'cow' ? 0.5 : type === 'pig' ? 0.35 : 0.2;
+  g.add(setMesh(new THREE.Mesh(new THREE.CircleGeometry(shadowSize, 8), shadowMat),{position:new THREE.Vector3(0,0.02,0),rotation:new THREE.Euler(-Math.PI/2,0,0)}));
+  return g;
+}
+
+function addWorldAnimal(data) {
+  if (worldAnimals[data.id]) return;
+  const mesh = createAnimalMesh(data.type);
+  mesh.position.set(data.x, getY(data.x, data.z), data.z);
+  mesh.rotation.y = data.rot || 0;
+  scene.add(mesh);
+  worldAnimals[data.id] = {
+    type: data.type,
+    mesh,
+    targetPos: new THREE.Vector3(data.x, getY(data.x, data.z), data.z),
+    targetRot: data.rot || 0,
+    moving: data.moving || false
+  };
+}
+
+// ═══════════════════════════════════════
 // PLAYER MARKERS (visible on map)
 // ═══════════════════════════════════════
 function createPlayerMarker(color) {
@@ -1246,13 +1346,31 @@ function animate() {
     if(mesh._blink) mesh._blink.material.emissiveIntensity = 1 + Math.sin(gameTime*3)*1.5;
   }
 
-  // Animate animals
+  // Animate building animals (static decorations)
   for(const obj of animatedObjects) {
     if(obj.type==='chicken') {
       obj.mesh.position.y = obj.basePos.y + Math.sin(gameTime*3+obj.phase)*0.03;
       obj.mesh.rotation.y += Math.sin(gameTime*0.5+obj.phase)*0.005;
     } else if(obj.type==='cow') {
       obj.mesh.position.y = obj.basePos.y + Math.sin(gameTime*1.5+obj.phase)*0.02;
+    }
+  }
+
+  // Animate world animals (server-driven)
+  for(const [id, wa] of Object.entries(worldAnimals)) {
+    const m = wa.mesh;
+    // Smooth interpolation
+    m.position.lerp(wa.targetPos, 0.1);
+    // Smooth rotation
+    let dr = wa.targetRot - m.rotation.y;
+    while(dr > Math.PI) dr -= Math.PI*2;
+    while(dr < -Math.PI) dr += Math.PI*2;
+    m.rotation.y += dr * 0.1;
+    // Walk bobbing
+    if(wa.moving) {
+      const bobSpeed = wa.type==='chicken' ? 8 : wa.type==='pig' ? 5 : 3;
+      const bobHeight = wa.type==='chicken' ? 0.04 : 0.025;
+      m.position.y = wa.targetPos.y + Math.abs(Math.sin(gameTime*bobSpeed)) * bobHeight;
     }
   }
 
@@ -1432,6 +1550,12 @@ socket.on('joined', (data) => {
     console.log('[SmartFarm] Spawning', data.harvestables.length, 'harvestables...');
     for(const h of data.harvestables) {
       spawnHarvestableMesh(h);
+    }
+
+    // Spawn animals
+    if (data.animals) {
+      for (const a of data.animals) addWorldAnimal(a);
+      console.log('[SmartFarm] Spawned', data.animals.length, 'animals');
     }
 
     // Spawn player character (use saved position if restored, otherwise spawn point)
@@ -1629,6 +1753,20 @@ socket.on('playerMoved', (data) => {
 
 socket.on('chatMessage', (data) => {
   addChatMessage(data.name, data.color, data.msg);
+});
+
+socket.on('animalsUpdate', (animals) => {
+  if (!gameStarted) return;
+  for (const a of animals) {
+    if (!worldAnimals[a.id]) {
+      addWorldAnimal(a);
+    } else {
+      const wa = worldAnimals[a.id];
+      wa.targetPos.set(a.x, getY(a.x, a.z), a.z);
+      wa.targetRot = a.rot;
+      wa.moving = a.moving;
+    }
+  }
 });
 
 socket.on('playerWon', (data) => {
