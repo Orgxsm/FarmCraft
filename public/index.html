@@ -57,7 +57,7 @@ canvas{display:block}
 .player-you{opacity:.5;font-size:9px;color:#8A7050}
 
 /* ─── CHAT (Pokopia warm) ─── */
-#chat-box{position:fixed;bottom:50px;left:10px;z-index:12;display:none;width:300px;pointer-events:auto}
+#chat-box{position:fixed;top:auto;bottom:auto;right:10px;top:60px;left:auto;z-index:12;display:none;width:280px;pointer-events:auto}
 #chat-messages{background:rgba(0,0,0,0.35);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,0.1);border-radius:14px 14px 0 0;padding:8px;max-height:150px;overflow-y:auto;font-size:11px;color:#fff;scrollbar-width:thin;text-shadow:0 1px 2px rgba(0,0,0,0.5)}
 #chat-messages::-webkit-scrollbar{width:4px}
 #chat-messages::-webkit-scrollbar-thumb{background:rgba(180,150,100,0.3);border-radius:2px}
@@ -123,7 +123,7 @@ canvas{display:block}
   #join-screen button{padding:12px 34px;font-size:15px}
 
   #player-list{right:5px;top:44px;min-width:120px;padding:8px 10px}
-  #chat-box{width:calc(100% - 20px);left:10px}
+  #chat-box{width:calc(100% - 20px);right:10px;left:10px;top:auto;bottom:100px}
   #chat-messages{max-height:100px}
 
   #messages{top:44px}
@@ -156,7 +156,7 @@ canvas{display:block}
   .build-btn .b-name{font-size:8px}
   .tab-btn{padding:6px 10px;font-size:10px}
   #messages{top:32px}
-  #chat-box{bottom:42px}
+  #chat-box{top:auto;bottom:42px}
 }
 </style>
 </head>

@@ -1318,7 +1318,7 @@ function animate() {
     if(isMoving) {
       // Camera-relative direction
       const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw));
-      const right = new THREE.Vector3(forward.z, 0, -forward.x);
+      const right = new THREE.Vector3(-forward.z, 0, forward.x);
       const moveDir = right.multiplyScalar(mx).add(forward.multiplyScalar(-mz)).normalize();
 
       playerPos.x += moveDir.x * PLAYER_SPEED * dt;
