@@ -17,7 +17,34 @@ const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/
 // ═══════════════════════════════════════
 // NETWORK
 // ═══════════════════════════════════════
-const socket = io();
+// Connect to the server that served this page, or localhost:3000 for dev
+const SERVER_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? window.location.origin
+  : window.location.origin; // Same origin — adjust if server is elsewhere
+
+let socket;
+let connectionFailed = false;
+try {
+  socket = io(SERVER_URL, {
+    timeout: 5000,
+    reconnectionAttempts: 3,
+    transports: ['websocket', 'polling']
+  });
+  socket.on('connect_error', () => {
+    if (!connectionFailed) {
+      connectionFailed = true;
+      const info = document.querySelector('#join-screen .info');
+      if (info) {
+        info.innerHTML = '⚠️ Serveur non disponible.<br>Lance <code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px">npm start</code> en local pour jouer.';
+        info.style.color = '#FFB347';
+        info.style.opacity = '1';
+      }
+    }
+  });
+} catch(e) {
+  connectionFailed = true;
+}
+
 let myPlayerId = null;
 let myPlayer = null;
 let serverBuildings = {}; // from server join payload
@@ -1367,6 +1394,15 @@ document.getElementById('player-name').addEventListener('keydown', (e) => { if(e
 
 function joinGame() {
   const name = document.getElementById('player-name').value.trim() || 'Joueur';
+  if (!socket || !socket.connected) {
+    const info = document.querySelector('#join-screen .info');
+    if (info) {
+      info.innerHTML = '⚠️ Pas de connexion au serveur.<br>Lance <code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px">npm start</code> puis ouvre <code style="background:rgba(0,0,0,0.2);padding:2px 6px;border-radius:4px">localhost:3000</code>';
+      info.style.color = '#FFB347';
+      info.style.opacity = '1';
+    }
+    return;
+  }
   socket.emit('join', { name });
 }
 

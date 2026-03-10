@@ -11,7 +11,9 @@ body{overflow:hidden;background:#000;font-family:'Fredoka',sans-serif}
 canvas{display:block}
 
 /* ─── JOIN SCREEN (Pokopia warm & cozy) ─── */
-#join-screen{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 50% 40%,rgba(120,180,100,0.95),rgba(60,100,60,0.97),rgba(20,40,30,0.99));display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center}
+#join-screen{position:fixed;inset:0;z-index:200;background:#2a1a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;overflow:hidden}
+#join-bg{position:absolute;inset:0;z-index:0}
+#join-screen>*:not(#join-bg){position:relative;z-index:1}
 #join-screen h1{font-size:52px;margin-bottom:8px;background:linear-gradient(135deg,#FFE066,#FF8844,#FF6B6B,#66BB6A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;letter-spacing:2px}
 #join-screen .sub{font-size:13px;opacity:.5;margin-bottom:28px;letter-spacing:3px;text-transform:uppercase;color:#E8F0D8}
 #join-screen input{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,200,0.25);border-radius:20px;padding:14px 24px;font-size:16px;color:#fff;font-family:inherit;width:280px;text-align:center;margin-bottom:16px;outline:none;transition:border-color .3s}
@@ -158,6 +160,7 @@ canvas{display:block}
 <body>
 
 <div id="join-screen">
+  <canvas id="join-bg"></canvas>
   <h1>SmartFarm</h1>
   <div class="sub">Multiplayer Farming</div>
   <input type="text" id="player-name" placeholder="Ton pseudo..." maxlength="16" autocomplete="off">
@@ -206,7 +209,252 @@ canvas{display:block}
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}
 </script>
-<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+<script>
+// ─── Pokopia-style join screen background ───
+(function(){
+  const c=document.getElementById('join-bg');
+  if(!c)return;
+  const ctx=c.getContext('2d');
+  function resize(){c.width=innerWidth;c.height=innerHeight;draw()}
+  window.addEventListener('resize',resize);
+
+  function draw(){
+    const W=c.width,H=c.height;
+    // Sky gradient (warm sunset)
+    const sky=ctx.createLinearGradient(0,0,0,H*0.65);
+    sky.addColorStop(0,'#1a0a2e');
+    sky.addColorStop(0.25,'#3a1a4e');
+    sky.addColorStop(0.5,'#cc5533');
+    sky.addColorStop(0.7,'#ff9955');
+    sky.addColorStop(0.85,'#ffcc77');
+    sky.addColorStop(1,'#ffeeaa');
+    ctx.fillStyle=sky;
+    ctx.fillRect(0,0,W,H);
+
+    // Stars
+    for(let i=0;i<80;i++){
+      const x=Math.random()*W,y=Math.random()*H*0.35;
+      const s=Math.random()*1.5+0.5;
+      const a=Math.random()*0.6+0.2;
+      ctx.fillStyle=`rgba(255,255,230,${a})`;
+      ctx.beginPath();ctx.arc(x,y,s,0,6.28);ctx.fill();
+    }
+
+    // Moon
+    ctx.fillStyle='rgba(255,240,200,0.15)';
+    ctx.beginPath();ctx.arc(W*0.8,H*0.15,60,0,6.28);ctx.fill();
+    ctx.fillStyle='rgba(255,240,210,0.3)';
+    ctx.beginPath();ctx.arc(W*0.8,H*0.15,35,0,6.28);ctx.fill();
+    ctx.fillStyle='rgba(255,245,220,0.6)';
+    ctx.beginPath();ctx.arc(W*0.8,H*0.15,20,0,6.28);ctx.fill();
+
+    // Clouds (soft warm)
+    function cloud(cx,cy,size){
+      ctx.fillStyle='rgba(255,200,150,0.12)';
+      for(let i=0;i<5;i++){
+        const dx=(i-2)*size*0.6,dy=Math.sin(i*1.3)*size*0.15;
+        const r=size*(0.4+Math.sin(i*2)*0.15);
+        ctx.beginPath();ctx.arc(cx+dx,cy+dy,r,0,6.28);ctx.fill();
+      }
+    }
+    cloud(W*0.2,H*0.18,40);
+    cloud(W*0.55,H*0.12,55);
+    cloud(W*0.85,H*0.25,35);
+
+    // Distant mountains (purple/blue silhouette)
+    ctx.fillStyle='rgba(60,30,80,0.5)';
+    ctx.beginPath();ctx.moveTo(0,H*0.6);
+    for(let x=0;x<=W;x+=W/12){ctx.lineTo(x,H*0.6-Math.sin(x/W*3+0.5)*H*0.08-Math.random()*H*0.02)}
+    ctx.lineTo(W,H*0.6);ctx.fill();
+
+    ctx.fillStyle='rgba(80,40,60,0.4)';
+    ctx.beginPath();ctx.moveTo(0,H*0.63);
+    for(let x=0;x<=W;x+=W/10){ctx.lineTo(x,H*0.63-Math.sin(x/W*4+1)*H*0.05-Math.random()*H*0.015)}
+    ctx.lineTo(W,H*0.63);ctx.fill();
+
+    // Rolling hills (warm green layers)
+    function hill(y,h,color){
+      ctx.fillStyle=color;
+      ctx.beginPath();ctx.moveTo(-10,H);
+      for(let x=-10;x<=W+10;x+=4){
+        const hy=y-Math.sin(x/W*5+h)*H*0.04-Math.sin(x/W*2.3+h*2)*H*0.025;
+        ctx.lineTo(x,hy);
+      }
+      ctx.lineTo(W+10,H);ctx.fill();
+    }
+    hill(H*0.68,0,'rgba(90,130,50,0.7)');
+    hill(H*0.72,1.5,'rgba(80,140,45,0.8)');
+    hill(H*0.76,3,'rgba(70,120,40,0.9)');
+
+    // Main ground
+    const ground=ctx.createLinearGradient(0,H*0.75,0,H);
+    ground.addColorStop(0,'#4a7a30');
+    ground.addColorStop(0.4,'#3a6a28');
+    ground.addColorStop(1,'#2a4a18');
+    ctx.fillStyle=ground;
+    ctx.fillRect(0,H*0.75,W,H*0.25);
+
+    // Trees (cute round Pokopia style)
+    function tree(x,y,s){
+      // Trunk
+      ctx.fillStyle='#5a3a1a';
+      ctx.fillRect(x-3*s,y-12*s,6*s,14*s);
+      // Canopy layers
+      const colors=['#2a7a3a','#3a8a4a','#4a9a5a'];
+      for(let i=0;i<3;i++){
+        ctx.fillStyle=colors[i];
+        ctx.beginPath();
+        ctx.arc(x+(i-1)*3*s,y-16*s-i*6*s,(14-i*2)*s,0,6.28);
+        ctx.fill();
+      }
+      // Highlight
+      ctx.fillStyle='rgba(255,255,200,0.08)';
+      ctx.beginPath();ctx.arc(x-4*s,y-22*s,6*s,0,6.28);ctx.fill();
+    }
+
+    // Barn silhouette
+    function barn(x,y,s){
+      ctx.fillStyle='#8a2a1a';
+      ctx.fillRect(x-20*s,y-25*s,40*s,25*s);
+      // Gambrel roof
+      ctx.fillStyle='#5a2a15';
+      ctx.beginPath();
+      ctx.moveTo(x-24*s,y-25*s);
+      ctx.lineTo(x-15*s,y-38*s);
+      ctx.lineTo(x,y-42*s);
+      ctx.lineTo(x+15*s,y-38*s);
+      ctx.lineTo(x+24*s,y-25*s);
+      ctx.fill();
+      // Door
+      ctx.fillStyle='#4a1a0a';
+      ctx.fillRect(x-8*s,y-18*s,16*s,18*s);
+      // X
+      ctx.strokeStyle='#ddd';ctx.lineWidth=1.5*s;
+      ctx.beginPath();ctx.moveTo(x-6*s,y-16*s);ctx.lineTo(x+6*s,y-2*s);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(x+6*s,y-16*s);ctx.lineTo(x-6*s,y-2*s);ctx.stroke();
+      // Window glow
+      ctx.fillStyle='rgba(255,200,100,0.5)';
+      ctx.fillRect(x-18*s,y-22*s,6*s,6*s);
+      ctx.fillRect(x+12*s,y-22*s,6*s,6*s);
+    }
+
+    // Windmill
+    function windmill(x,y,s){
+      ctx.fillStyle='#e8dcc8';
+      ctx.beginPath();
+      ctx.moveTo(x-8*s,y);ctx.lineTo(x-5*s,y-35*s);
+      ctx.lineTo(x+5*s,y-35*s);ctx.lineTo(x+8*s,y);ctx.fill();
+      ctx.fillStyle='#6a3a1a';
+      ctx.beginPath();
+      ctx.moveTo(x-7*s,y-35*s);ctx.lineTo(x,y-42*s);ctx.lineTo(x+7*s,y-35*s);ctx.fill();
+      // Blades
+      ctx.strokeStyle='#8a6a4a';ctx.lineWidth=2*s;
+      for(let i=0;i<4;i++){
+        const a=i*Math.PI/2+0.3;
+        const bx=x+Math.cos(a)*22*s,by=y-35*s+Math.sin(a)*22*s;
+        ctx.beginPath();ctx.moveTo(x,y-35*s);ctx.lineTo(bx,by);ctx.stroke();
+      }
+    }
+
+    // Antenna
+    function antenna(x,y,s){
+      ctx.strokeStyle='#ccc';ctx.lineWidth=2*s;
+      ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-40*s);ctx.stroke();
+      // Cross bars
+      for(let i=0;i<3;i++){
+        const w=(12-i*3)*s;
+        const ay=y-30*s-i*5*s;
+        ctx.beginPath();ctx.moveTo(x-w,ay);ctx.lineTo(x+w,ay);ctx.stroke();
+      }
+      // Blink light
+      ctx.fillStyle='rgba(255,50,50,0.8)';
+      ctx.beginPath();ctx.arc(x,y-41*s,2.5*s,0,6.28);ctx.fill();
+      ctx.fillStyle='rgba(255,50,50,0.2)';
+      ctx.beginPath();ctx.arc(x,y-41*s,6*s,0,6.28);ctx.fill();
+      // Signal waves
+      ctx.strokeStyle='rgba(0,200,255,0.15)';ctx.lineWidth=1.5*s;
+      for(let i=1;i<=3;i++){
+        ctx.beginPath();ctx.arc(x,y-35*s,10*i*s,-0.8,-2.3,true);ctx.stroke();
+        ctx.beginPath();ctx.arc(x,y-35*s,10*i*s,0.8-Math.PI,Math.PI+2.3,true);ctx.stroke();
+      }
+    }
+
+    // Solar panels
+    function solar(x,y,s){
+      for(let i=0;i<3;i++){
+        ctx.fillStyle='#1a1a55';
+        const px=x+i*14*s-14*s;
+        // Panel
+        ctx.save();ctx.translate(px,y);ctx.rotate(-0.3);
+        ctx.fillRect(-6*s,-4*s,12*s,8*s);
+        // Frame
+        ctx.strokeStyle='#aaa';ctx.lineWidth=1*s;
+        ctx.strokeRect(-6*s,-4*s,12*s,8*s);
+        // Grid lines
+        ctx.strokeStyle='rgba(100,150,255,0.3)';ctx.lineWidth=0.5*s;
+        ctx.beginPath();ctx.moveTo(0,-4*s);ctx.lineTo(0,4*s);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(-6*s,0);ctx.lineTo(6*s,0);ctx.stroke();
+        ctx.restore();
+        // Leg
+        ctx.fillStyle='#888';
+        ctx.fillRect(px-1*s,y,2*s,6*s);
+      }
+      // Gleam
+      ctx.fillStyle='rgba(100,180,255,0.08)';
+      ctx.beginPath();ctx.arc(x,y-5*s,18*s,0,6.28);ctx.fill();
+    }
+
+    const groundY=H*0.82;
+    const sc=Math.min(W/1400,H/800)*1.2;
+
+    // Compose scene
+    tree(W*0.05,groundY-5,1.3*sc);
+    tree(W*0.1,groundY+2,1*sc);
+    tree(W*0.15,groundY-3,1.5*sc);
+
+    solar(W*0.28,groundY-8,1.2*sc);
+
+    barn(W*0.45,groundY,1.3*sc);
+
+    windmill(W*0.62,groundY,1.1*sc);
+
+    antenna(W*0.75,groundY,0.9*sc);
+
+    tree(W*0.82,groundY-2,1.4*sc);
+    tree(W*0.88,groundY+3,1.1*sc);
+    tree(W*0.93,groundY-4,1.6*sc);
+    tree(W*0.97,groundY+1,0.9*sc);
+
+    // Fence line
+    ctx.strokeStyle='rgba(140,100,60,0.4)';ctx.lineWidth=1.5;
+    for(let x=W*0.18;x<W*0.78;x+=15){
+      ctx.beginPath();ctx.moveTo(x,groundY+2);ctx.lineTo(x,groundY-6);ctx.stroke();
+    }
+    ctx.beginPath();ctx.moveTo(W*0.18,groundY-3);ctx.lineTo(W*0.78,groundY-3);ctx.stroke();
+
+    // Fireflies / particles
+    for(let i=0;i<25;i++){
+      const x=Math.random()*W,y=H*0.5+Math.random()*H*0.35;
+      const a=Math.random()*0.5+0.1;
+      const r=Math.random()*2+1;
+      ctx.fillStyle=`rgba(255,238,100,${a})`;
+      ctx.beginPath();ctx.arc(x,y,r,0,6.28);ctx.fill();
+      ctx.fillStyle=`rgba(255,238,100,${a*0.3})`;
+      ctx.beginPath();ctx.arc(x,y,r*3,0,6.28);ctx.fill();
+    }
+
+    // Vignette overlay
+    const vig=ctx.createRadialGradient(W/2,H*0.4,W*0.2,W/2,H*0.5,W*0.8);
+    vig.addColorStop(0,'rgba(0,0,0,0)');
+    vig.addColorStop(1,'rgba(0,0,0,0.5)');
+    ctx.fillStyle=vig;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  resize();
+})();
+</script>
 <script src="game.js" type="module"></script>
 </body>
 </html>
