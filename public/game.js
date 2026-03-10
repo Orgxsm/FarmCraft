@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
 // ═══════════════════════════════════════
 // UTILS
@@ -43,7 +44,8 @@ const animatedObjects = [];
 // THREE.JS SETUP
 // ═══════════════════════════════════════
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 800);
+// Lower FOV for tilt-shift miniature feel
+const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 0.1, 800);
 
 const renderer = new THREE.WebGLRenderer({ antialias:!isMobile, powerPreference:'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
@@ -51,14 +53,54 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile?1.5:2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = isMobile?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.3;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
+// ── Tilt-shift shader (Pokopia miniature/diorama effect) ──
+const TiltShiftShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    focusY: { value: 0.5 },
+    blurAmount: { value: isMobile ? 0.003 : 0.005 },
+    blurSize: { value: isMobile ? 0.15 : 0.22 }
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float focusY;
+    uniform float blurAmount;
+    uniform float blurSize;
+    varying vec2 vUv;
+    void main(){
+      float dist=abs(vUv.y-focusY);
+      float strength=smoothstep(0.0,blurSize,dist)*blurAmount;
+      vec4 color=vec4(0.0);
+      float total=0.0;
+      for(float i=-4.0;i<=4.0;i+=1.0){
+        float w=1.0-abs(i)/4.0;
+        color+=texture2D(tDiffuse,vUv+vec2(0.0,i*strength))*w;
+        total+=w;
+      }
+      // Slight warmth + saturation boost for cozy feel
+      vec3 c=(color/total).rgb;
+      c=mix(c,c*vec3(1.08,1.03,0.95),0.3);
+      float lum=dot(c,vec3(0.299,0.587,0.114));
+      c=mix(vec3(lum),c,1.15);
+      gl_FragColor=vec4(c,1.0);
+    }`
+};
+
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), isMobile?0.12:0.25, 0.5, 0.85);
-if(!isMobile) composer.addPass(bloomPass);
+// Soft glow bloom (Pokopia warm glow)
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), isMobile?0.2:0.4, 0.8, 0.7);
+composer.addPass(bloomPass);
+// Tilt-shift pass
+if(!isMobile) {
+  const tiltShiftPass = new ShaderPass(TiltShiftShader);
+  composer.addPass(tiltShiftPass);
+}
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -72,11 +114,11 @@ controls.panSpeed = isMobile?0.8:0.5;
 if(isMobile){controls.rotateSpeed=0.5;controls.zoomSpeed=0.8;controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN}}
 
 // ═══════════════════════════════════════
-// LIGHTING
+// LIGHTING (Pokopia warm golden atmosphere)
 // ═══════════════════════════════════════
-scene.add(new THREE.AmbientLight(0x8899bb, 0.4));
-const sunLight = new THREE.DirectionalLight(0xfff4e0, 1.8);
-sunLight.position.set(25, 35, 20);
+scene.add(new THREE.AmbientLight(0xffe8cc, 0.55));
+const sunLight = new THREE.DirectionalLight(0xffeedd, 1.6);
+sunLight.position.set(30, 40, 25);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(isMobile?2048:4096, isMobile?2048:4096);
 sunLight.shadow.camera.left = -60;
@@ -85,99 +127,159 @@ sunLight.shadow.camera.top = 60;
 sunLight.shadow.camera.bottom = -60;
 sunLight.shadow.bias = -0.0002;
 scene.add(sunLight);
-scene.add(new THREE.HemisphereLight(0x99ccff, 0x337722, 0.3));
-const fillLight = new THREE.DirectionalLight(0x6688cc, 0.25);
-fillLight.position.set(-20, 12, -15);
+// Warm hemisphere: sky=soft blue, ground=warm green
+scene.add(new THREE.HemisphereLight(0xaaddff, 0x88cc66, 0.45));
+const fillLight = new THREE.DirectionalLight(0xffccaa, 0.2);
+fillLight.position.set(-20, 15, -15);
 scene.add(fillLight);
+// Rim light for that Pokopia backlight glow
+const rimLight = new THREE.DirectionalLight(0xffddaa, 0.3);
+rimLight.position.set(-15, 8, 30);
+scene.add(rimLight);
 
-scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.004);
+// Soft pastel sky (Pokopia gradient feel)
+scene.background = new THREE.Color(0xB8E0F6);
+scene.fog = new THREE.FogExp2(0xC8E8F8, 0.003);
 
 // ═══════════════════════════════════════
-// TERRAIN (200x200)
+// TERRAIN - Pokopia Blocky/Voxel Style
 // ═══════════════════════════════════════
+const BLOCK = 4; // block size for voxel terrain
+
 function terrainHeight(x, z) {
-  return Math.sin(x*0.08)*Math.cos(z*0.06)*0.9
-    + Math.sin(x*0.04+1)*Math.cos(z*0.03+2)*1.4
-    + Math.sin(x*0.2)*Math.cos(z*0.25)*0.2;
+  // Gentle rolling hills quantized to block steps
+  const smooth = Math.sin(x*0.04)*Math.cos(z*0.035)*2.5
+    + Math.sin(x*0.02+1)*Math.cos(z*0.018+2)*3.5;
+  return Math.round(smooth / BLOCK) * BLOCK;
 }
 function getY(x, z) { return terrainHeight(x, z); }
 
 function createTerrain(mapSize) {
-  const geo = new THREE.PlaneGeometry(mapSize, mapSize, 120, 120);
-  const gp = geo.attributes.position;
-  const gColors = new Float32Array(gp.count * 3);
-  for (let i=0; i<gp.count; i++) {
-    const x=gp.getX(i), y=gp.getY(i);
-    const h = terrainHeight(x, y);
-    gp.setZ(i, h);
-    const t = (h+2)/4;
-    gColors[i*3] = lerp(0.18,0.35,t)+rand(-0.02,0.02);
-    gColors[i*3+1] = lerp(0.28,0.58,t)+rand(-0.02,0.02);
-    gColors[i*3+2] = lerp(0.1,0.2,t)+rand(-0.01,0.01);
+  const halfMap = mapSize / 2;
+  const step = BLOCK;
+  const grassColors = [0x7BC44E, 0x6DB83E, 0x8ACD5A, 0x5FAA35, 0x72C048];
+  const dirtColors = [0xA07040, 0x9A6A3A, 0xB07848];
+
+  // Count blocks needed
+  const grassPositions = [];
+  const dirtPositions = [];
+
+  for (let x = -halfMap; x < halfMap; x += step) {
+    for (let z = -halfMap; z < halfMap; z += step) {
+      const cx = x + step/2, cz = z + step/2;
+      const h = terrainHeight(cx, cz);
+      grassPositions.push({x:cx, y:h - step/2, z:cz});
+      // Dirt layers below
+      for (let dy = h - step; dy >= Math.min(h - step*2, -BLOCK); dy -= step) {
+        dirtPositions.push({x:cx, y:dy - step/2, z:cz});
+      }
+    }
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(gColors, 3));
-  geo.computeVertexNormals();
-  const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors:true, roughness:0.95 }));
-  ground.rotation.x = -Math.PI/2;
-  ground.receiveShadow = true;
-  ground.name = 'ground';
-  scene.add(ground);
-  return ground;
+
+  const blockGeo = new THREE.BoxGeometry(step, step, step);
+
+  // Grass layer (InstancedMesh for performance)
+  const grassMat = new THREE.MeshStandardMaterial({roughness:0.82, flatShading:true});
+  const grassIM = new THREE.InstancedMesh(blockGeo, grassMat, grassPositions.length);
+  grassIM.receiveShadow = true;
+  grassIM.castShadow = true;
+  const colorAttr = new Float32Array(grassPositions.length * 3);
+  const dummy = new THREE.Matrix4();
+  for (let i = 0; i < grassPositions.length; i++) {
+    const p = grassPositions[i];
+    dummy.makeTranslation(p.x, p.y, p.z);
+    grassIM.setMatrixAt(i, dummy);
+    const gc = new THREE.Color(grassColors[Math.floor(Math.abs(Math.sin(p.x*0.3+p.z*0.7)*4.99))]);
+    colorAttr[i*3] = gc.r; colorAttr[i*3+1] = gc.g; colorAttr[i*3+2] = gc.b;
+  }
+  grassIM.instanceColor = new THREE.InstancedBufferAttribute(colorAttr, 3);
+  scene.add(grassIM);
+
+  // Dirt layer
+  const dirtMat = new THREE.MeshStandardMaterial({roughness:0.95, flatShading:true});
+  const dirtIM = new THREE.InstancedMesh(blockGeo, dirtMat, Math.max(dirtPositions.length,1));
+  dirtIM.receiveShadow = true;
+  const dirtColorAttr = new Float32Array(Math.max(dirtPositions.length,1) * 3);
+  for (let i = 0; i < dirtPositions.length; i++) {
+    const p = dirtPositions[i];
+    dummy.makeTranslation(p.x, p.y, p.z);
+    dirtIM.setMatrixAt(i, dummy);
+    const dc = new THREE.Color(dirtColors[Math.floor(Math.random()*3)]);
+    dirtColorAttr[i*3] = dc.r; dirtColorAttr[i*3+1] = dc.g; dirtColorAttr[i*3+2] = dc.b;
+  }
+  dirtIM.instanceColor = new THREE.InstancedBufferAttribute(dirtColorAttr, 3);
+  dirtIM.count = dirtPositions.length;
+  scene.add(dirtIM);
+
+  // Deep base
+  const baseMat = new THREE.MeshStandardMaterial({color:0x5C9A30, roughness:1});
+  const base = new THREE.Mesh(new THREE.BoxGeometry(mapSize+20, 2, mapSize+20), baseMat);
+  base.position.y = -BLOCK*2 - 1;
+  base.receiveShadow = true;
+  scene.add(base);
+
+  return grassIM;
 }
 
 let ground;
 
 // ═══════════════════════════════════════
-// WATER
+// WATER (Pokopia style: blocky pools with shiny surface)
 // ═══════════════════════════════════════
+const waterMeshes = [];
 function createWaterBodies() {
   const waterMat = new THREE.MeshPhysicalMaterial({
-    color:0x2288cc, roughness:0.05, metalness:0.1,
-    transparent:true, opacity:0.72, clearcoat:1.0
+    color:0x55BBEE, roughness:0.02, metalness:0.05,
+    transparent:true, opacity:0.78, clearcoat:1.0,
+    emissive:0x225588, emissiveIntensity:0.08
   });
-  // Multiple lakes spread across the large map
+  // Blocky lakes (square/rectangular for Pokopia vibe)
   const lakes = [
-    {x:-30,z:20,r:8}, {x:35,z:-30,r:6}, {x:-50,z:-40,r:5},
-    {x:50,z:45,r:7}, {x:0,z:-55,r:5}, {x:-60,z:0,r:4}
+    {x:-30,z:20,w:14,h:10}, {x:35,z:-30,w:10,h:12}, {x:-50,z:-40,w:8,h:8},
+    {x:50,z:45,w:12,h:10}, {x:0,z:-55,w:10,h:8}, {x:-60,z:0,w:8,h:6}
   ];
   for (const l of lakes) {
-    const lake = new THREE.Mesh(new THREE.CircleGeometry(l.r, 48), waterMat.clone());
-    lake.rotation.x = -Math.PI/2;
-    lake.position.set(l.x, getY(l.x, l.z)+0.12, l.z);
+    const lake = new THREE.Mesh(new THREE.BoxGeometry(l.w, 0.6, l.h), waterMat.clone());
+    const ly = getY(l.x, l.z) - 0.5;
+    lake.position.set(l.x, ly, l.z);
+    lake.receiveShadow = true;
     scene.add(lake);
-    // Edge rocks
-    for (let i=0; i<Math.floor(l.r*2.5); i++) {
-      const a=(i/(l.r*2.5))*Math.PI*2+rand(-0.2,0.2);
-      const rad=l.r-0.5+rand(0,2);
-      const rx=l.x+Math.cos(a)*rad, rz=l.z+Math.sin(a)*rad;
-      const rock = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(rand(0.2,0.5),0),
-        new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0,0,rand(0.4,0.6)),roughness:0.9,flatShading:true})
-      );
-      rock.position.set(rx,getY(rx,rz)+0.1,rz);
-      rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
-      rock.castShadow=true;
-      scene.add(rock);
+    waterMeshes.push(lake);
+    // Sandy edge blocks
+    const sandMat = new THREE.MeshStandardMaterial({color:0xE8D5A8, roughness:0.9, flatShading:true});
+    for (let sx = -l.w/2 - 2; sx <= l.w/2 + 2; sx += BLOCK) {
+      for (const sz of [-l.h/2 - 2, l.h/2 + 2]) {
+        if (Math.random() > 0.5) continue;
+        const sand = new THREE.Mesh(new THREE.BoxGeometry(BLOCK*0.8,0.4,BLOCK*0.8), sandMat);
+        sand.position.set(l.x+sx, ly-0.1, l.z+sz);
+        scene.add(sand);
+      }
     }
   }
 }
 
 // ═══════════════════════════════════════
-// NATURE CREATORS
+// NATURE CREATORS (Pokopia: round, colorful, blocky-charming)
 // ═══════════════════════════════════════
 function createPineTree(x,z,s=1) {
   const g = new THREE.Group();
-  const h = rand(1.2,2.0)*s;
+  // Blocky trunk
+  const th = rand(1.5,2.5)*s;
   g.add(Object.assign(new THREE.Mesh(
-    new THREE.CylinderGeometry(0.12*s,0.22*s,h,6),
-    new THREE.MeshStandardMaterial({color:0x6B4226,roughness:0.9})
-  ),{position:new THREE.Vector3(0,h/2,0),castShadow:true}));
-  const lc=[0x1a6b3a,0x228844,0x2d8a4e,0x1f7a3f];
-  for(let i=0;i<4;i++){
-    const r=(1.4-i*0.22)*s, lh=(1.1-i*0.1)*s;
-    const leaf=new THREE.Mesh(new THREE.ConeGeometry(r,lh,7),new THREE.MeshStandardMaterial({color:lc[i],roughness:0.75,flatShading:true}));
-    leaf.position.y=h+i*0.55*s; leaf.castShadow=true;
+    new THREE.BoxGeometry(0.4*s,th,0.4*s),
+    new THREE.MeshStandardMaterial({color:0x8B5E3C,roughness:0.85,flatShading:true})
+  ),{position:new THREE.Vector3(0,th/2,0),castShadow:true}));
+  // Round puffy foliage layers (Pokopia style)
+  const lc=[0x3DB85A,0x4CC968,0x5AD478,0x45C060];
+  for(let i=0;i<3;i++){
+    const r=(1.8-i*0.4)*s;
+    const leaf=new THREE.Mesh(
+      new THREE.SphereGeometry(r,8,6),
+      new THREE.MeshStandardMaterial({color:lc[i],roughness:0.7,flatShading:true})
+    );
+    leaf.scale.y = 0.65;
+    leaf.position.y = th + 0.3*s + i*0.7*s;
+    leaf.castShadow = true;
     g.add(leaf);
   }
   g.position.set(x,getY(x,z),z);
@@ -188,32 +290,45 @@ function createPineTree(x,z,s=1) {
 
 function createOakTree(x,z,s=1) {
   const g=new THREE.Group();
-  const h=rand(1.5,2.2)*s;
+  // Thick blocky trunk
+  const h=rand(2,3)*s;
   g.add(Object.assign(new THREE.Mesh(
-    new THREE.CylinderGeometry(0.15*s,0.3*s,h,7),
-    new THREE.MeshStandardMaterial({color:0x5C3A1E,roughness:0.95,flatShading:true})
+    new THREE.BoxGeometry(0.5*s,h,0.5*s),
+    new THREE.MeshStandardMaterial({color:0x6B4226,roughness:0.9,flatShading:true})
   ),{position:new THREE.Vector3(0,h/2,0),castShadow:true}));
-  const cc=[0x2d7a3e,0x358844,0x3a9550][randInt(0,2)];
-  const cm=new THREE.MeshStandardMaterial({color:cc,roughness:0.7,flatShading:true});
-  const mc=new THREE.Mesh(new THREE.IcosahedronGeometry(1.5*s,1),cm);
+  // Big round canopy (Pokopia puffy style)
+  const cc=[0x4CAF50,0x66BB6A,0x43A047][randInt(0,2)];
+  const cm=new THREE.MeshStandardMaterial({color:cc,roughness:0.65,flatShading:true});
+  const mc=new THREE.Mesh(new THREE.SphereGeometry(2*s,8,6),cm);
+  mc.scale.y = 0.7;
   mc.position.y=h+0.8*s; mc.castShadow=true;
-  const cp=mc.geometry.attributes.position;
-  for(let i=0;i<cp.count;i++){cp.setX(i,cp.getX(i)+rand(-0.15,0.15)*s);cp.setY(i,cp.getY(i)+rand(-0.1,0.15)*s);cp.setZ(i,cp.getZ(i)+rand(-0.15,0.15)*s)}
-  mc.geometry.computeVertexNormals();
   g.add(mc);
-  for(let i=0;i<3;i++){const b=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.5,0.9)*s,1),cm);b.position.set(rand(-0.8,0.8)*s,h+rand(0.4,1.2)*s,rand(-0.8,0.8)*s);b.castShadow=true;g.add(b)}
+  // Extra puffs
+  for(let i=0;i<2;i++){
+    const b=new THREE.Mesh(new THREE.SphereGeometry(rand(0.8,1.2)*s,7,5),cm);
+    b.position.set(rand(-1,1)*s,h+rand(0.2,1)*s,rand(-1,1)*s);
+    b.castShadow=true;g.add(b);
+  }
   g.position.set(x,getY(x,z),z);
-  g.rotation.y=rand(0,6.28);
   scene.add(g);
   return g;
 }
 
 function createBirchTree(x,z,s=1) {
   const g=new THREE.Group();
-  const h=rand(2,3)*s;
-  g.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.08*s,0.14*s,h,6),new THREE.MeshStandardMaterial({color:0xE8DDD0,roughness:0.6})),{position:new THREE.Vector3(0,h/2,0),castShadow:true}));
-  const fm=new THREE.MeshStandardMaterial({color:0x88cc44,roughness:0.6,transparent:true,opacity:0.9,flatShading:true});
-  for(let i=0;i<4;i++){const l=new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.4,0.7)*s,1),fm);l.position.set(rand(-0.5,0.5)*s,h+rand(-0.2,0.6)*s,rand(-0.5,0.5)*s);l.castShadow=true;g.add(l)}
+  const h=rand(2.5,3.5)*s;
+  // White blocky trunk
+  g.add(Object.assign(new THREE.Mesh(
+    new THREE.BoxGeometry(0.3*s,h,0.3*s),
+    new THREE.MeshStandardMaterial({color:0xF0E8D8,roughness:0.5,flatShading:true})
+  ),{position:new THREE.Vector3(0,h/2,0),castShadow:true}));
+  // Light green/yellow puffy foliage
+  const fm=new THREE.MeshStandardMaterial({color:0xA8E060,roughness:0.6,flatShading:true});
+  for(let i=0;i<3;i++){
+    const l=new THREE.Mesh(new THREE.SphereGeometry(rand(0.7,1)*s,7,5),fm);
+    l.position.set(rand(-0.4,0.4)*s,h+rand(0,0.8)*s,rand(-0.4,0.4)*s);
+    l.castShadow=true;g.add(l);
+  }
   g.position.set(x,getY(x,z),z);
   scene.add(g);
   return g;
@@ -221,22 +336,31 @@ function createBirchTree(x,z,s=1) {
 
 function createRockCluster(x,z,ms=1) {
   const g=new THREE.Group();
+  // Pokopia style: rounder, more cubic rocks with warm tones
   const n=randInt(1,3);
+  const rockColors = [0x9E9E9E, 0xB0B0B0, 0xA8A0A0, 0x8A8A8A];
   for(let i=0;i<n;i++){
-    const s=ms*rand(0.3,1);
-    const geo=new THREE.DodecahedronGeometry(0.5*s,randInt(0,1));
-    const rp=geo.attributes.position;
-    for(let j=0;j<rp.count;j++){rp.setX(j,rp.getX(j)*rand(0.8,1.2));rp.setY(j,rp.getY(j)*rand(0.7,1));rp.setZ(j,rp.getZ(j)*rand(0.8,1.2))}
-    geo.computeVertexNormals();
-    const rock=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({color:[0x777,0x888,0x999,0x6a6a6a][randInt(0,3)],roughness:0.92,flatShading:true}));
-    rock.position.set(rand(-0.4,0.4)*ms,0.25*s,rand(-0.4,0.4)*ms);
-    rock.rotation.set(rand(0,3),rand(0,3),rand(0,3));
+    const s=ms*rand(0.4,0.9);
+    // Mix of boxes and rounded shapes for blocky feel
+    const geo = Math.random() > 0.5
+      ? new THREE.BoxGeometry(s,s*rand(0.7,1.2),s)
+      : new THREE.DodecahedronGeometry(0.5*s,0);
+    const rock=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({
+      color:rockColors[randInt(0,3)],roughness:0.85,flatShading:true
+    }));
+    rock.position.set(rand(-0.3,0.3)*ms,s*0.35,rand(-0.3,0.3)*ms);
+    rock.rotation.y=rand(0,1);
     rock.castShadow=true;rock.receiveShadow=true;
     g.add(rock);
   }
-  if(Math.random()>0.4){
-    const moss=new THREE.Mesh(new THREE.SphereGeometry(0.2*ms,6,6),new THREE.MeshStandardMaterial({color:0x4a7a3a,roughness:0.9,flatShading:true}));
-    moss.position.set(rand(-0.2,0.2),0.3*ms,rand(-0.2,0.2));moss.scale.y=0.4;g.add(moss);
+  // Small grass/moss tufts
+  if(Math.random()>0.3){
+    const moss=new THREE.Mesh(
+      new THREE.SphereGeometry(0.25*ms,5,4),
+      new THREE.MeshStandardMaterial({color:0x6BCB4A,roughness:0.8,flatShading:true})
+    );
+    moss.position.set(rand(-0.2,0.2),0.15*ms,rand(-0.2,0.2));
+    moss.scale.y=0.4;g.add(moss);
   }
   g.position.set(x,getY(x,z),z);
   scene.add(g);
@@ -254,16 +378,28 @@ function createTreeByType(type, x, z, s) {
 // ═══════════════════════════════════════
 function createCabin(pos) {
   const g=new THREE.Group();
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3.2,0.4,3.2),new THREE.MeshStandardMaterial({color:0x777,roughness:0.95,flatShading:true})),{position:new THREE.Vector3(0,0.2,0),castShadow:true}));
-  const wm=new THREE.MeshStandardMaterial({color:0xA0722A,roughness:0.85});
-  const wm2=new THREE.MeshStandardMaterial({color:0x8B6320,roughness:0.85});
-  for(let i=0;i<8;i++){g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3,0.22,3),i%2?wm2:wm),{position:new THREE.Vector3(0,0.5+i*0.22,0),castShadow:true}))}
-  const rm=new THREE.MeshStandardMaterial({color:0x8B2500,roughness:0.75});
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,0.12,3.4),rm),{position:new THREE.Vector3(-0.85,2.7,0),rotation:new THREE.Euler(0,0,0.65),castShadow:true}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,0.12,3.4),rm),{position:new THREE.Vector3(0.85,2.7,0),rotation:new THREE.Euler(0,0,-0.65),castShadow:true}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.7,1.4,0.12),new THREE.MeshStandardMaterial({color:0x4a2a0a})),{position:new THREE.Vector3(0,1.1,1.55)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.5,1.2,0.5),new THREE.MeshStandardMaterial({color:0x666,roughness:0.9,flatShading:true})),{position:new THREE.Vector3(1,3.3,-0.8),castShadow:true}));
-  g.add(new THREE.PointLight(0xff9944,0.5,5));
+  // Foundation
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3.4,0.5,3.4),new THREE.MeshStandardMaterial({color:0x8E8E8E,roughness:0.9,flatShading:true})),{position:new THREE.Vector3(0,0.25,0),castShadow:true}));
+  // Warm log walls (Pokopia cozy)
+  const wm=new THREE.MeshStandardMaterial({color:0xC4924A,roughness:0.8,flatShading:true});
+  const wm2=new THREE.MeshStandardMaterial({color:0xB8843E,roughness:0.8,flatShading:true});
+  for(let i=0;i<8;i++){g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(3,0.25,3),i%2?wm2:wm),{position:new THREE.Vector3(0,0.6+i*0.25,0),castShadow:true}))}
+  // Warm red roof
+  const rm=new THREE.MeshStandardMaterial({color:0xCC4422,roughness:0.7,flatShading:true});
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,0.15,3.6),rm),{position:new THREE.Vector3(-0.85,2.8,0),rotation:new THREE.Euler(0,0,0.65),castShadow:true}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.5,0.15,3.6),rm),{position:new THREE.Vector3(0.85,2.8,0),rotation:new THREE.Euler(0,0,-0.65),castShadow:true}));
+  // Cute door (warm brown)
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.8,1.5,0.15),new THREE.MeshStandardMaterial({color:0x7B4A1A,flatShading:true})),{position:new THREE.Vector3(0,1.2,1.55)}));
+  // Round doorknob
+  g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.06,6,6),new THREE.MeshStandardMaterial({color:0xFFD700,metalness:0.8,roughness:0.2})),{position:new THREE.Vector3(0.25,1.2,1.65)}));
+  // Windows (warm glow)
+  for(const s of [-1,1]){
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.15,0.6,0.5),new THREE.MeshStandardMaterial({color:0xFFE8A0,emissive:0xFFCC44,emissiveIntensity:0.3,transparent:true,opacity:0.7})),{position:new THREE.Vector3(s*1.55,1.5,0)}));
+  }
+  // Chimney
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.5,1.2,0.5),new THREE.MeshStandardMaterial({color:0x777,roughness:0.9,flatShading:true})),{position:new THREE.Vector3(1,3.4,-0.8),castShadow:true}));
+  // Warm interior light
+  g.add(Object.assign(new THREE.PointLight(0xFFAA44,0.6,6),{position:new THREE.Vector3(0,1.5,0)}));
   g.position.copy(pos);
   scene.add(g);
   return g;
@@ -304,12 +440,19 @@ function createField(pos) {
 
 function createBarn(pos) {
   const g=new THREE.Group();
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4.2,0.3,3.2),new THREE.MeshStandardMaterial({color:0x666,roughness:0.95,flatShading:true})),{position:new THREE.Vector3(0,0.15,0),castShadow:true}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,2.8,3),new THREE.MeshStandardMaterial({color:0xBB3333,roughness:0.8})),{position:new THREE.Vector3(0,1.7,0),castShadow:true}));
-  const rm=new THREE.MeshStandardMaterial({color:0x5C3A1E,roughness:0.75});
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.8,0.12,3.4),rm),{position:new THREE.Vector3(-1.2,3.5,0),rotation:new THREE.Euler(0,0,0.55),castShadow:true}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.8,0.12,3.4),rm),{position:new THREE.Vector3(1.2,3.5,0),rotation:new THREE.Euler(0,0,-0.55),castShadow:true}));
-  g.add(new THREE.PointLight(0xffaa44,0.3,5));
+  // Foundation
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4.4,0.35,3.4),new THREE.MeshStandardMaterial({color:0x8E8E8E,roughness:0.9,flatShading:true})),{position:new THREE.Vector3(0,0.17,0),castShadow:true}));
+  // Bright red barn (Pokopia vivid)
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,3,3),new THREE.MeshStandardMaterial({color:0xDD4444,roughness:0.75,flatShading:true})),{position:new THREE.Vector3(0,1.85,0),castShadow:true}));
+  // Warm brown roof
+  const rm=new THREE.MeshStandardMaterial({color:0x8B5E3C,roughness:0.7,flatShading:true});
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.8,0.15,3.6),rm),{position:new THREE.Vector3(-1.2,3.7,0),rotation:new THREE.Euler(0,0,0.55),castShadow:true}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.8,0.15,3.6),rm),{position:new THREE.Vector3(1.2,3.7,0),rotation:new THREE.Euler(0,0,-0.55),castShadow:true}));
+  // White X on doors
+  const wm=new THREE.MeshStandardMaterial({color:0xFFF8E8,flatShading:true});
+  for(const r of [0.78,-0.78])g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08,2.2,0.06),wm),{position:new THREE.Vector3(0,1.6,1.53),rotation:new THREE.Euler(0,0,r)}));
+  // Warm glow
+  g.add(Object.assign(new THREE.PointLight(0xFFAA44,0.4,5),{position:new THREE.Vector3(0,1.5,0)}));
   g.position.copy(pos);scene.add(g);return g;
 }
 
@@ -334,26 +477,36 @@ function createCoop(pos) {
 
 function createGreenhouse(pos) {
   const g=new THREE.Group();
-  const glassMat=new THREE.MeshPhysicalMaterial({color:0xaaddff,transparent:true,opacity:0.3,roughness:0.05,metalness:0.1,clearcoat:0.8});
-  const frameMat=new THREE.MeshStandardMaterial({color:0xdddddd,metalness:0.6,roughness:0.3});
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,0.1,3.5),new THREE.MeshStandardMaterial({color:0x666})),{position:new THREE.Vector3(0,0.05,0)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,2,0.05),glassMat),{position:new THREE.Vector3(0,1.05,1.75)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,2,0.05),glassMat),{position:new THREE.Vector3(0,1.05,-1.75)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.05,2,3.5),glassMat),{position:new THREE.Vector3(-2,1.05,0)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.05,2,3.5),glassMat),{position:new THREE.Vector3(2,1.05,0)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.2,0.05,3.6),glassMat),{position:new THREE.Vector3(-1,2.3,0),rotation:new THREE.Euler(0,0,0.3)}));
-  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.2,0.05,3.6),glassMat),{position:new THREE.Vector3(1,2.3,0),rotation:new THREE.Euler(0,0,-0.3)}));
-  const plantMat=new THREE.MeshStandardMaterial({color:0x33aa33,roughness:0.7});
+  // Pokopia: warm-tinted glass, white frame, colorful interior
+  const glassMat=new THREE.MeshPhysicalMaterial({color:0xCCEEFF,transparent:true,opacity:0.25,roughness:0.02,metalness:0.05,clearcoat:0.9});
+  const frameMat=new THREE.MeshStandardMaterial({color:0xF8F8F0,metalness:0.3,roughness:0.4,flatShading:true});
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4.2,0.15,3.7),new THREE.MeshStandardMaterial({color:0x8E8E8E,flatShading:true})),{position:new THREE.Vector3(0,0.07,0)}));
+  // Glass panels
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,2,0.06),glassMat),{position:new THREE.Vector3(0,1.1,1.75)}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(4,2,0.06),glassMat),{position:new THREE.Vector3(0,1.1,-1.75)}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.06,2,3.5),glassMat),{position:new THREE.Vector3(-2,1.1,0)}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.06,2,3.5),glassMat),{position:new THREE.Vector3(2,1.1,0)}));
+  // Roof panels
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.2,0.06,3.7),glassMat),{position:new THREE.Vector3(-1,2.3,0),rotation:new THREE.Euler(0,0,0.3)}));
+  g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.2,0.06,3.7),glassMat),{position:new THREE.Vector3(1,2.3,0),rotation:new THREE.Euler(0,0,-0.3)}));
+  // White frame ribs
+  for(const x of [-2,0,2])g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08,2,0.08),frameMat),{position:new THREE.Vector3(x,1.1,1.75)}));
+  // Colorful Pokopia plants inside
+  const plantColors = [0x4CAF50, 0x66BB6A, 0x43A047];
+  const fruitColors = [0xFF5252, 0xFFD740, 0xFF6E40];
   for(let i=0;i<8;i++){
     const plant=new THREE.Group();
-    plant.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,rand(0.6,1.2),5),plantMat),{position:new THREE.Vector3(0,0.4,0)}));
+    // Blocky stem
+    plant.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.06,rand(0.6,1),0.06),new THREE.MeshStandardMaterial({color:plantColors[i%3],flatShading:true})),{position:new THREE.Vector3(0,0.4,0)}));
+    // Round fruits
     for(let j=0;j<randInt(1,3);j++){
-      plant.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.08,6,6),new THREE.MeshStandardMaterial({color:0xff3333,roughness:0.4})),{position:new THREE.Vector3(rand(-0.1,0.1),rand(0.3,0.8),rand(-0.1,0.1))}));
+      plant.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.1,6,6),new THREE.MeshStandardMaterial({color:fruitColors[j%3],roughness:0.4,emissive:fruitColors[j%3],emissiveIntensity:0.1})),{position:new THREE.Vector3(rand(-0.1,0.1),rand(0.3,0.8),rand(-0.1,0.1))}));
     }
     plant.position.set(-1.5+i*0.45,0.1,rand(-1,1));
     g.add(plant);
   }
-  g.add(Object.assign(new THREE.PointLight(0xff9944,0.3,4),{position:new THREE.Vector3(0,1.5,0)}));
+  // Warm glow inside
+  g.add(Object.assign(new THREE.PointLight(0xFFCC66,0.4,4),{position:new THREE.Vector3(0,1.5,0)}));
   g.position.copy(pos);scene.add(g);return g;
 }
 
@@ -469,25 +622,33 @@ const buildingCreators = {
 // ═══════════════════════════════════════
 function createPlayerMarker(color) {
   const g = new THREE.Group();
-  // Flag pole
-  g.add(Object.assign(new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04, 0.04, 4, 6),
-    new THREE.MeshStandardMaterial({color:0xcccccc, metalness:0.5})
-  ),{position:new THREE.Vector3(0,2,0)}));
-  // Flag
   const flagColor = new THREE.Color(color);
+  // Cute blocky pole
   g.add(Object.assign(new THREE.Mesh(
-    new THREE.PlaneGeometry(1.5, 1),
-    new THREE.MeshStandardMaterial({color:flagColor, side:THREE.DoubleSide, emissive:flagColor, emissiveIntensity:0.3})
-  ),{position:new THREE.Vector3(0.75,3.5,0)}));
-  // Name ring on ground
+    new THREE.BoxGeometry(0.12, 4, 0.12),
+    new THREE.MeshStandardMaterial({color:0xF0E8D8, roughness:0.5, flatShading:true})
+  ),{position:new THREE.Vector3(0,2,0)}));
+  // Triangular flag (Pokopia cute)
+  const flagGeo = new THREE.BufferGeometry();
+  flagGeo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 1.5,0.3,0, 0,1,0], 3));
+  flagGeo.computeVertexNormals();
+  g.add(Object.assign(new THREE.Mesh(
+    flagGeo,
+    new THREE.MeshStandardMaterial({color:flagColor, side:THREE.DoubleSide, emissive:flagColor, emissiveIntensity:0.2, flatShading:true})
+  ),{position:new THREE.Vector3(0.06,3.2,0)}));
+  // Glowing ring on ground
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(1.5, 1.8, 32),
-    new THREE.MeshBasicMaterial({color:flagColor, transparent:true, opacity:0.3, side:THREE.DoubleSide})
+    new THREE.RingGeometry(1.5, 2, 32),
+    new THREE.MeshBasicMaterial({color:flagColor, transparent:true, opacity:0.25, side:THREE.DoubleSide})
   );
   ring.rotation.x = -Math.PI/2;
-  ring.position.y = 0.1;
+  ring.position.y = 0.15;
   g.add(ring);
+  // Star on top
+  g.add(Object.assign(new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.15, 0),
+    new THREE.MeshStandardMaterial({color:0xFFD700, emissive:0xFFCC00, emissiveIntensity:0.5, metalness:0.6, flatShading:true})
+  ),{position:new THREE.Vector3(0,4.1,0)}));
   return g;
 }
 
@@ -502,24 +663,68 @@ function addOwnerBanner(buildingMesh, playerName, playerColor) {
 }
 
 // ═══════════════════════════════════════
-// CLOUDS
+// CLOUDS (Pokopia: big puffy marshmallow clouds)
 // ═══════════════════════════════════════
 const clouds = [];
 function spawnClouds() {
-  const cloudMat = new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.4, roughness:1});
-  for(let i=0; i<(isMobile?10:20); i++){
+  const cloudMat = new THREE.MeshStandardMaterial({
+    color:0xFFFFFF, transparent:true, opacity:0.55, roughness:1,
+    emissive:0xFFEECC, emissiveIntensity:0.08
+  });
+  for(let i=0; i<(isMobile?8:16); i++){
     const g = new THREE.Group();
-    const n = randInt(3,6);
+    const n = randInt(4,8);
     for(let j=0;j<n;j++){
-      const s = rand(2,5);
-      const blob = new THREE.Mesh(new THREE.SphereGeometry(s,6,6), cloudMat);
-      blob.position.set(rand(-3,3), rand(-0.5,0.5), rand(-2,2));
-      blob.scale.y = 0.4;
+      const s = rand(3,7);
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(s,8,6), cloudMat);
+      blob.position.set(rand(-4,4), rand(-0.5,1), rand(-3,3));
+      blob.scale.y = 0.35; // Very flat puffy
       g.add(blob);
     }
-    g.position.set(rand(-MAP_SIZE/2, MAP_SIZE/2), rand(25,40), rand(-MAP_SIZE/2, MAP_SIZE/2));
+    g.position.set(rand(-MAP_SIZE/2, MAP_SIZE/2), rand(28,45), rand(-MAP_SIZE/2, MAP_SIZE/2));
     scene.add(g);
     clouds.push(g);
+  }
+}
+
+// ═══════════════════════════════════════
+// AMBIENT PARTICLES (Pokopia sparkles, fireflies, floating leaves)
+// ═══════════════════════════════════════
+const ambientParticles = [];
+function spawnAmbientParticles() {
+  if(isMobile) return; // Skip on mobile for performance
+  // Sparkles / light motes
+  const sparkleMat = new THREE.MeshBasicMaterial({color:0xFFFFCC, transparent:true, opacity:0.6});
+  for(let i=0; i<40; i++){
+    const sparkle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 4, 4), sparkleMat.clone());
+    sparkle.position.set(rand(-60,60), rand(2,10), rand(-60,60));
+    scene.add(sparkle);
+    ambientParticles.push({
+      mesh:sparkle, type:'sparkle',
+      baseY:sparkle.position.y,
+      phase:rand(0,6.28),
+      speed:rand(0.3,0.8),
+      radius:rand(0.5,2)
+    });
+  }
+  // Floating leaves
+  const leafColors = [0x7BC44E, 0xA8E060, 0xFFCC44, 0xFF8844];
+  for(let i=0; i<20; i++){
+    const leaf = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.2, 0.15),
+      new THREE.MeshStandardMaterial({
+        color:leafColors[i%4], side:THREE.DoubleSide, transparent:true, opacity:0.7
+      })
+    );
+    leaf.position.set(rand(-50,50), rand(3,12), rand(-50,50));
+    scene.add(leaf);
+    ambientParticles.push({
+      mesh:leaf, type:'leaf',
+      baseY:leaf.position.y,
+      phase:rand(0,6.28),
+      drift:rand(-0.5,0.5),
+      spin:rand(0.5,2)
+    });
   }
 }
 
@@ -530,12 +735,13 @@ function showGhostForKey(key) {
   removeGhost();
   const bdef = serverBuildings[key];
   if(!bdef) return;
+  // Pokopia placement preview: soft glowing block
   const ghost = new THREE.Mesh(
     new THREE.BoxGeometry(bdef.size[0], 2.5, bdef.size[1]),
-    new THREE.MeshStandardMaterial({ color:0x4CAF50, transparent:true, opacity:0.2 })
+    new THREE.MeshStandardMaterial({ color:0x7BC44E, transparent:true, opacity:0.25, emissive:0x66BB6A, emissiveIntensity:0.15 })
   );
   const wire = new THREE.Mesh(new THREE.BoxGeometry(bdef.size[0], 2.5, bdef.size[1]),
-    new THREE.MeshBasicMaterial({ color:0x66bb6a, wireframe:true, transparent:true, opacity:0.35 })
+    new THREE.MeshBasicMaterial({ color:0xA8E060, wireframe:true, transparent:true, opacity:0.4 })
   );
   ghost.add(wire);
   ghost.position.y = 1.25;
@@ -849,10 +1055,32 @@ function animate() {
     p.mesh.scale.setScalar(p.life/p.maxLife);
   }
 
-  // Clouds
+  // Clouds (slow drift)
   for(const c of clouds) {
-    c.position.x += dt * 1.5;
-    if(c.position.x > MAP_SIZE/2 + 20) c.position.x = -MAP_SIZE/2 - 20;
+    c.position.x += dt * 0.8;
+    if(c.position.x > MAP_SIZE/2 + 30) c.position.x = -MAP_SIZE/2 - 30;
+  }
+
+  // Water gentle bob
+  for(const w of waterMeshes) {
+    w.position.y += Math.sin(gameTime*1.2 + w.position.x)*0.002;
+  }
+
+  // Ambient particles (Pokopia sparkles & leaves)
+  for(const ap of ambientParticles) {
+    if(ap.type==='sparkle') {
+      ap.mesh.position.y = ap.baseY + Math.sin(gameTime*ap.speed + ap.phase)*ap.radius;
+      ap.mesh.position.x += Math.sin(gameTime*0.3 + ap.phase)*0.005;
+      ap.mesh.material.opacity = 0.3 + Math.sin(gameTime*2 + ap.phase)*0.3;
+      ap.mesh.scale.setScalar(0.5 + Math.sin(gameTime*3 + ap.phase)*0.5);
+    } else if(ap.type==='leaf') {
+      ap.mesh.position.y = ap.baseY + Math.sin(gameTime*0.5 + ap.phase)*1.5 - dt*0.3;
+      ap.mesh.position.x += ap.drift*dt;
+      ap.mesh.rotation.x += ap.spin*dt;
+      ap.mesh.rotation.z += ap.spin*dt*0.7;
+      // Reset if too low
+      if(ap.mesh.position.y < 1) { ap.mesh.position.y = rand(8,14); ap.baseY = ap.mesh.position.y; ap.mesh.position.x = rand(-50,50); ap.mesh.position.z = rand(-50,50); }
+    }
   }
 
   // Ghost float
@@ -887,6 +1115,7 @@ socket.on('joined', (data) => {
   ground = createTerrain(MAP_SIZE);
   createWaterBodies();
   spawnClouds();
+  spawnAmbientParticles();
 
   // Spawn harvestables
   for(const h of data.harvestables) {

@@ -10,91 +10,91 @@
 body{overflow:hidden;background:#000;font-family:'Fredoka',sans-serif}
 canvas{display:block}
 
-/* ─── JOIN SCREEN ─── */
-#join-screen{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse,rgba(0,15,10,0.97),rgba(0,0,0,0.99));display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center}
-#join-screen h1{font-size:48px;margin-bottom:6px;background:linear-gradient(135deg,#66bb6a,#00ccff,#FFD54F);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-#join-screen .sub{font-size:13px;opacity:.4;margin-bottom:24px;letter-spacing:3px;text-transform:uppercase}
-#join-screen input{background:rgba(255,255,255,0.08);border:2px solid rgba(255,255,255,0.15);border-radius:14px;padding:14px 24px;font-size:16px;color:#fff;font-family:inherit;width:280px;text-align:center;margin-bottom:16px;outline:none;transition:border-color .3s}
-#join-screen input:focus{border-color:#66bb6a}
-#join-screen input::placeholder{color:rgba(255,255,255,0.3)}
-#join-screen button{background:linear-gradient(135deg,#43A047,#00aa88);border:none;color:#fff;padding:14px 44px;font-size:17px;border-radius:50px;cursor:pointer;font-weight:600;font-family:inherit;transition:all .3s;box-shadow:0 4px 20px rgba(0,170,136,0.3)}
-#join-screen button:hover{transform:scale(1.06);box-shadow:0 8px 35px rgba(0,170,136,0.45)}
-#join-screen .info{font-size:12px;opacity:.35;margin-top:16px}
+/* ─── JOIN SCREEN (Pokopia warm & cozy) ─── */
+#join-screen{position:fixed;inset:0;z-index:200;background:radial-gradient(ellipse at 50% 40%,rgba(120,180,100,0.95),rgba(60,100,60,0.97),rgba(20,40,30,0.99));display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center}
+#join-screen h1{font-size:52px;margin-bottom:8px;background:linear-gradient(135deg,#FFE066,#FF8844,#FF6B6B,#66BB6A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;letter-spacing:2px}
+#join-screen .sub{font-size:13px;opacity:.5;margin-bottom:28px;letter-spacing:3px;text-transform:uppercase;color:#E8F0D8}
+#join-screen input{background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,200,0.25);border-radius:20px;padding:14px 24px;font-size:16px;color:#fff;font-family:inherit;width:280px;text-align:center;margin-bottom:16px;outline:none;transition:border-color .3s}
+#join-screen input:focus{border-color:#FFD54F}
+#join-screen input::placeholder{color:rgba(255,255,230,0.35)}
+#join-screen button{background:linear-gradient(135deg,#FF8844,#FFB347);border:none;color:#fff;padding:14px 44px;font-size:17px;border-radius:50px;cursor:pointer;font-weight:700;font-family:inherit;transition:all .3s;box-shadow:0 4px 25px rgba(255,136,68,0.35);text-shadow:0 1px 2px rgba(0,0,0,0.2)}
+#join-screen button:hover{transform:scale(1.06);box-shadow:0 8px 40px rgba(255,136,68,0.5)}
+#join-screen .info{font-size:12px;opacity:.4;margin-top:16px;color:#D8E8C0}
 
-/* ─── HUD ─── */
+/* ─── HUD (Pokopia warm rounded pills) ─── */
 #hud{position:fixed;top:0;left:0;right:0;display:flex;justify-content:center;gap:6px;padding:8px 12px;z-index:10;pointer-events:none;flex-wrap:wrap}
-.resource{display:flex;align-items:center;gap:4px;color:#fff;font-size:13px;font-weight:600;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:5px 12px;border-radius:18px;border:1px solid rgba(255,255,255,0.08);transition:transform .2s}
+.resource{display:flex;align-items:center;gap:4px;color:#4A3520;font-size:13px;font-weight:600;background:rgba(255,248,230,0.88);backdrop-filter:blur(12px);padding:5px 14px;border-radius:22px;border:2px solid rgba(200,170,100,0.25);transition:transform .2s;box-shadow:0 2px 8px rgba(0,0,0,0.06)}
 .resource .icon{font-size:16px}
 .resource .val{min-width:20px;text-align:center}
-.resource.data-res{border-color:rgba(0,200,255,0.3);background:rgba(0,40,60,0.6)}
+.resource.data-res{border-color:rgba(100,180,220,0.4);background:rgba(230,245,255,0.88);color:#2A4A5A}
 
-/* ─── BUILD MENU ─── */
+/* ─── BUILD MENU (Pokopia rounded cards) ─── */
 #build-menu{position:fixed;bottom:44px;left:0;right:0;display:flex;justify-content:center;gap:6px;padding:10px 8px 10px;z-index:10;flex-wrap:wrap;max-height:35vh;overflow-y:auto}
-.build-btn{background:rgba(15,15,25,0.75);backdrop-filter:blur(14px);border:2px solid rgba(255,255,255,0.08);border-radius:12px;padding:8px 10px;color:#fff;cursor:pointer;text-align:center;transition:all .25s;min-width:90px;position:relative}
-.build-btn:hover:not(.locked):not(.built){background:rgba(76,175,80,0.25);border-color:#66bb6a;transform:translateY(-3px)}
-.build-btn.active{background:rgba(76,175,80,0.3);border-color:#66bb6a;box-shadow:0 0 15px rgba(76,175,80,0.25)}
+.build-btn{background:rgba(255,248,235,0.88);backdrop-filter:blur(14px);border:2px solid rgba(200,170,110,0.2);border-radius:16px;padding:8px 10px;color:#4A3520;cursor:pointer;text-align:center;transition:all .25s;min-width:90px;position:relative;box-shadow:0 2px 8px rgba(0,0,0,0.05)}
+.build-btn:hover:not(.locked):not(.built){background:rgba(255,220,150,0.9);border-color:#FFB347;transform:translateY(-3px);box-shadow:0 4px 15px rgba(255,160,60,0.2)}
+.build-btn.active{background:rgba(255,220,150,0.92);border-color:#FF8844;box-shadow:0 0 18px rgba(255,136,68,0.25)}
 .build-btn.locked{opacity:.3;cursor:not-allowed}
-.build-btn.built{opacity:.55;border-color:rgba(76,175,80,0.3);cursor:default}
-.build-btn.iot-btn{border-color:rgba(0,200,255,0.2)}
-.build-btn .b-icon{font-size:22px}
+.build-btn.built{opacity:.6;border-color:rgba(120,180,80,0.4);background:rgba(220,245,210,0.85);cursor:default}
+.build-btn.iot-btn{border-color:rgba(100,180,220,0.3)}
+.build-btn .b-icon{font-size:24px}
 .build-btn .b-name{font-size:10px;font-weight:600;margin:3px 0 1px;letter-spacing:.3px}
 .build-btn .b-cost{font-size:9px;opacity:.55}
 
-/* ─── TAB BAR ─── */
+/* ─── TAB BAR (Pokopia warm) ─── */
 #tab-bar{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:center;gap:0;z-index:11;pointer-events:all}
-.tab-btn{background:rgba(10,10,20,0.85);color:#fff;border:none;padding:10px 20px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-top:2px solid transparent;transition:all .2s;letter-spacing:.5px}
-.tab-btn:hover{background:rgba(30,30,50,0.9)}
-.tab-btn.active{border-top-color:#66bb6a;background:rgba(30,50,30,0.9)}
+.tab-btn{background:rgba(255,248,235,0.92);color:#5A4030;border:none;padding:10px 20px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border-top:3px solid transparent;transition:all .2s;letter-spacing:.5px}
+.tab-btn:hover{background:rgba(255,240,210,0.95)}
+.tab-btn.active{border-top-color:#FF8844;background:rgba(255,235,200,0.95);color:#CC5500}
 
-/* ─── PLAYER LIST ─── */
-#player-list{position:fixed;top:50px;right:10px;z-index:12;display:none;background:rgba(5,8,15,0.88);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:10px 14px;color:#fff;font-size:11px;min-width:140px}
-#player-list h4{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.4;margin-bottom:6px}
+/* ─── PLAYER LIST (Pokopia warm panel) ─── */
+#player-list{position:fixed;top:50px;right:10px;z-index:12;display:none;background:rgba(255,248,235,0.92);backdrop-filter:blur(14px);border:2px solid rgba(200,170,100,0.2);border-radius:16px;padding:10px 14px;color:#4A3520;font-size:11px;min-width:140px;box-shadow:0 3px 12px rgba(0,0,0,0.08)}
+#player-list h4{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:.5;margin-bottom:6px;color:#8A7050}
 .player-entry{display:flex;align-items:center;gap:6px;padding:3px 0}
-.player-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.player-name{font-weight:600;font-size:11px}
-.player-you{opacity:.5;font-size:9px}
+.player-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 4px rgba(0,0,0,0.15)}
+.player-name{font-weight:600;font-size:11px;color:#4A3520}
+.player-you{opacity:.5;font-size:9px;color:#8A7050}
 
-/* ─── CHAT ─── */
+/* ─── CHAT (Pokopia warm) ─── */
 #chat-box{position:fixed;bottom:50px;left:10px;z-index:12;display:none;width:300px}
-#chat-messages{background:rgba(5,8,15,0.8);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.05);border-radius:10px 10px 0 0;padding:8px;max-height:150px;overflow-y:auto;font-size:11px;color:#fff;scrollbar-width:thin}
+#chat-messages{background:rgba(255,248,235,0.9);backdrop-filter:blur(10px);border:2px solid rgba(200,170,100,0.2);border-radius:14px 14px 0 0;padding:8px;max-height:150px;overflow-y:auto;font-size:11px;color:#4A3520;scrollbar-width:thin}
 #chat-messages::-webkit-scrollbar{width:4px}
-#chat-messages::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15);border-radius:2px}
+#chat-messages::-webkit-scrollbar-thumb{background:rgba(180,150,100,0.3);border-radius:2px}
 .chat-msg{margin-bottom:3px;line-height:1.4;word-break:break-word}
 .chat-msg .sender{font-weight:600}
 #chat-input-box{display:flex}
-#chat-input{flex:1;background:rgba(10,10,20,0.9);border:1px solid rgba(255,255,255,0.1);border-top:none;border-radius:0 0 0 10px;padding:8px 10px;color:#fff;font-size:12px;font-family:inherit;outline:none}
-#chat-input::placeholder{color:rgba(255,255,255,0.25)}
-#chat-send{background:rgba(76,175,80,0.4);border:1px solid rgba(255,255,255,0.1);border-top:none;border-left:none;border-radius:0 0 10px 0;padding:8px 14px;color:#fff;cursor:pointer;font-size:12px;font-family:inherit}
+#chat-input{flex:1;background:rgba(255,252,245,0.95);border:2px solid rgba(200,170,100,0.2);border-top:none;border-radius:0 0 0 14px;padding:8px 10px;color:#4A3520;font-size:12px;font-family:inherit;outline:none}
+#chat-input::placeholder{color:rgba(140,120,80,0.4)}
+#chat-send{background:rgba(255,180,80,0.5);border:2px solid rgba(200,170,100,0.2);border-top:none;border-left:none;border-radius:0 0 14px 0;padding:8px 14px;color:#6A4A20;cursor:pointer;font-size:12px;font-family:inherit;font-weight:600}
 
-/* ─── TOOLTIP ─── */
-#tooltip{position:fixed;display:none;background:rgba(8,8,18,0.92);color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;pointer-events:none;z-index:20;border:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(14px);max-width:250px;line-height:1.5}
+/* ─── TOOLTIP (Pokopia warm) ─── */
+#tooltip{position:fixed;display:none;background:rgba(255,248,235,0.95);color:#4A3520;padding:10px 16px;border-radius:14px;font-size:12px;pointer-events:none;z-index:20;border:2px solid rgba(200,170,100,0.25);backdrop-filter:blur(14px);max-width:250px;line-height:1.5;box-shadow:0 3px 12px rgba(0,0,0,0.1)}
 
-/* ─── POPUPS & MESSAGES ─── */
-.popup{position:fixed;pointer-events:none;z-index:15;font-size:18px;font-weight:700;animation:popUp 1.3s cubic-bezier(.4,0,.2,1) forwards}
-.popup.res-wood{color:#8BC34A;text-shadow:0 0 10px rgba(139,195,74,0.5)}
-.popup.res-stone{color:#90A4AE;text-shadow:0 0 10px rgba(144,164,174,0.5)}
-.popup.res-data{color:#00ddff;text-shadow:0 0 12px rgba(0,200,255,0.6)}
-.popup.production{color:#FFD700;text-shadow:0 0 10px rgba(255,215,0,0.5)}
-@keyframes popUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{transform:translateY(-25px) scale(1.15)}100%{opacity:0;transform:translateY(-60px) scale(.8)}}
+/* ─── POPUPS & MESSAGES (Pokopia warm) ─── */
+.popup{position:fixed;pointer-events:none;z-index:15;font-size:20px;font-weight:700;animation:popUp 1.3s cubic-bezier(.4,0,.2,1) forwards}
+.popup.res-wood{color:#6DB83E;text-shadow:0 0 12px rgba(109,184,62,0.5)}
+.popup.res-stone{color:#9E9E9E;text-shadow:0 0 10px rgba(160,160,160,0.5)}
+.popup.res-data{color:#55BBEE;text-shadow:0 0 12px rgba(85,187,238,0.6)}
+.popup.production{color:#FFB347;text-shadow:0 0 12px rgba(255,179,71,0.5)}
+@keyframes popUp{0%{opacity:1;transform:translateY(0) scale(1)}50%{transform:translateY(-25px) scale(1.2)}100%{opacity:0;transform:translateY(-60px) scale(.8)}}
 
 #messages{position:fixed;top:52px;left:50%;transform:translateX(-50%);z-index:15;display:flex;flex-direction:column;align-items:center;gap:5px;pointer-events:none}
-.msg{background:rgba(8,8,18,0.88);color:#fff;padding:7px 18px;border-radius:10px;font-size:12px;backdrop-filter:blur(10px);animation:msgFade 3.5s ease-out forwards;border:1px solid rgba(255,255,255,0.05)}
+.msg{background:rgba(255,248,235,0.92);color:#4A3520;padding:8px 20px;border-radius:14px;font-size:12px;backdrop-filter:blur(10px);animation:msgFade 3.5s ease-out forwards;border:2px solid rgba(200,170,100,0.2);box-shadow:0 2px 8px rgba(0,0,0,0.06)}
 @keyframes msgFade{0%,55%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-18px)}}
 
-#day-indicator{position:fixed;top:8px;right:14px;z-index:10;color:#fff;font-size:12px;opacity:.45;background:rgba(0,0,0,0.4);padding:3px 10px;border-radius:10px}
+#day-indicator{position:fixed;top:8px;right:14px;z-index:10;color:#6A5030;font-size:12px;background:rgba(255,248,235,0.85);padding:4px 12px;border-radius:14px;border:1px solid rgba(200,170,100,0.2);font-weight:600}
 
-/* ─── WIN OVERLAY ─── */
-#win-screen{position:fixed;inset:0;z-index:100;display:none;background:rgba(0,0,0,0.88);flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center}
-#win-screen h1{font-size:48px;background:linear-gradient(135deg,#FFD700,#00ccff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-#win-screen p{font-size:18px;opacity:.7;margin-top:12px}
+/* ─── WIN OVERLAY (Pokopia celebration) ─── */
+#win-screen{position:fixed;inset:0;z-index:100;display:none;background:radial-gradient(ellipse,rgba(255,220,150,0.95),rgba(200,160,80,0.97));flex-direction:column;align-items:center;justify-content:center;color:#4A3520;text-align:center}
+#win-screen h1{font-size:52px;background:linear-gradient(135deg,#FF6B6B,#FFB347,#FFD700);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+#win-screen p{font-size:18px;opacity:.7;margin-top:12px;color:#6A5030}
 
-/* ─── PLACEMENT INDICATOR ─── */
-#placement-hint{display:none;position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:12;color:#fff;font-size:13px;background:rgba(76,175,80,0.3);border:1px solid rgba(76,175,80,0.4);padding:8px 18px;border-radius:20px;backdrop-filter:blur(8px);pointer-events:none;animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:.8}50%{opacity:1}}
+/* ─── PLACEMENT INDICATOR (Pokopia) ─── */
+#placement-hint{display:none;position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:12;color:#6A4A20;font-size:13px;background:rgba(255,220,150,0.88);border:2px solid rgba(255,180,80,0.4);padding:8px 20px;border-radius:22px;backdrop-filter:blur(8px);pointer-events:none;font-weight:600;animation:pulse 2s ease-in-out infinite;box-shadow:0 2px 10px rgba(255,160,60,0.15)}
+@keyframes pulse{0%,100%{opacity:.85}50%{opacity:1}}
 
 /* ─── MOBILE RESPONSIVE ─── */
-#mobile-hint{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:12;color:#fff;font-size:12px;opacity:.6;background:rgba(0,0,0,0.5);padding:6px 14px;border-radius:16px;backdrop-filter:blur(8px);white-space:nowrap;pointer-events:none;animation:hintFade 4s ease-out forwards}
-@keyframes hintFade{0%,60%{opacity:.6}100%{opacity:0}}
+#mobile-hint{display:none;position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:12;color:#6A5030;font-size:12px;opacity:.7;background:rgba(255,248,235,0.85);padding:6px 14px;border-radius:18px;backdrop-filter:blur(8px);white-space:nowrap;pointer-events:none;border:1px solid rgba(200,170,100,0.2);animation:hintFade 4s ease-out forwards;font-weight:500}
+@keyframes hintFade{0%,60%{opacity:.7}100%{opacity:0}}
 
 @media(max-width:768px){
   #hud{gap:3px;padding:6px 6px}
