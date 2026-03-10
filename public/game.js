@@ -90,6 +90,9 @@ let cameraZoom = isMobile ? 28 : 22;
 let posSendTimer = 0;
 let nearestHarvestable = null;
 let harvestCooldown = 0;
+let jumpVelocity = 0;
+let isJumping = false;
+let playerYOffset = 0; // jump height offset
 
 // ═══════════════════════════════════════
 // THREE.JS SETUP
@@ -1306,8 +1309,9 @@ function animate() {
   // ── Player movement (WASD) ──
   if(playerCharacter) {
     const chatFocused = document.activeElement === document.getElementById('chat-input');
-    const mx = (!chatFocused && (keys_pressed['d'] || keys_pressed['arrowright']) ? 1 : 0) - (!chatFocused && (keys_pressed['a'] || keys_pressed['arrowleft']) ? 1 : 0);
-    const mz = (!chatFocused && (keys_pressed['s'] || keys_pressed['arrowdown']) ? 1 : 0) - (!chatFocused && (keys_pressed['w'] || keys_pressed['arrowup']) ? 1 : 0);
+    // ZQSD (FR) + WASD (EN) + Arrows
+    const mx = (!chatFocused && (keys_pressed['d'] || keys_pressed['arrowright']) ? 1 : 0) - (!chatFocused && (keys_pressed['q'] || keys_pressed['a'] || keys_pressed['arrowleft']) ? 1 : 0);
+    const mz = (!chatFocused && (keys_pressed['s'] || keys_pressed['arrowdown']) ? 1 : 0) - (!chatFocused && (keys_pressed['z'] || keys_pressed['w'] || keys_pressed['arrowup']) ? 1 : 0);
 
     isMoving = Math.abs(mx) > 0 || Math.abs(mz) > 0;
 
@@ -1329,8 +1333,14 @@ function animate() {
       playerRotation = Math.atan2(moveDir.x, moveDir.z);
     }
 
-    // Snap to terrain
-    playerPos.y = getY(playerPos.x, playerPos.z);
+    // Snap to terrain + jump
+    const groundY = getY(playerPos.x, playerPos.z);
+    if(isJumping) {
+      playerYOffset += jumpVelocity * dt;
+      jumpVelocity -= 22 * dt; // gravity
+      if(playerYOffset <= 0) { playerYOffset = 0; isJumping = false; jumpVelocity = 0; }
+    }
+    playerPos.y = groundY + playerYOffset;
     playerCharacter.group.position.copy(playerPos);
     // Smooth rotation
     const angleDiff = ((playerRotation - playerCharacter.group.rotation.y + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -1465,6 +1475,7 @@ socket.on('joined', (data) => {
     document.getElementById('tab-bar').style.display = 'flex';
     document.getElementById('day-indicator').style.display = 'block';
     document.getElementById('player-list').style.display = 'block';
+    document.getElementById('chat-box').style.display = 'block';
     if(!isMobile) {
       const ch = document.getElementById('controls-hint');
       if(ch) { ch.style.display = 'block'; setTimeout(() => ch.style.opacity = '0', 8000); }
@@ -1477,7 +1488,7 @@ socket.on('joined', (data) => {
     if(isMobile) {
       showMessage('Deplace-toi et approche les ressources!', '#66bb6a');
     } else {
-      showMessage('WASD pour te deplacer, E pour recolter!', '#66bb6a');
+      showMessage('ZQSD pour te deplacer, E pour recolter!', '#66bb6a');
     }
     setTimeout(() => showMessage('Construis ta cabane en premier!', '#FFD54F'), 3500);
     console.log('[SmartFarm] Game started successfully!');
@@ -1747,22 +1758,30 @@ window.addEventListener('keyup', (e) => { keys_pressed[e.key.toLowerCase()] = fa
 // Keyboard - actions
 window.addEventListener('keydown', (e) => {
   if(!gameStarted) return;
-  // Harvest with E or Space
-  if((e.key === 'e' || e.key === ' ') && document.activeElement !== document.getElementById('chat-input')) {
+  const notChat = document.activeElement !== document.getElementById('chat-input');
+
+  // Jump with Space
+  if(e.key === ' ' && notChat) {
+    e.preventDefault();
+    if(!isJumping && playerCharacter) {
+      isJumping = true;
+      jumpVelocity = 8;
+    }
+  }
+
+  // Harvest with E
+  if(e.key === 'e' && notChat) {
     if(nearestHarvestable && harvestCooldown <= 0) {
       socket.emit('harvest', { id: nearestHarvestable.id });
       harvestCooldown = 0.35;
-      // Harvest animation: swing arm
       if(playerCharacter) {
         playerCharacter.rightArmPivot.rotation.x = -1.5;
         setTimeout(() => { if(playerCharacter) playerCharacter.rightArmPivot.rotation.x = 0; }, 200);
       }
-      // Face the harvestable
       const h = harvestableMap[nearestHarvestable.id];
       if(h) {
         playerRotation = Math.atan2(h.data.x - playerPos.x, h.data.z - playerPos.z);
       }
-      // Debris particles
       if(h && h.mesh) {
         const pc = isMobile?2:4;
         for(let p=0;p<pc;p++){
@@ -1773,19 +1792,25 @@ window.addEventListener('keydown', (e) => {
         }
       }
     }
-    if(e.key === ' ') e.preventDefault();
   }
 
-  if(e.key==='Escape'){selectedBuilding=null;removeGhost();renderBuildMenu()}
-  // Enter to focus chat
-  if(e.key==='Enter' && currentTab!=='chat') {
-    currentTab = 'chat';
-    document.querySelectorAll('.tab-btn').forEach(b => {
-      b.className = 'tab-btn' + (b.dataset.tab==='chat' ? ' active' : '');
-    });
-    document.getElementById('build-menu').style.display = 'none';
-    document.getElementById('chat-box').style.display = 'block';
-    document.getElementById('chat-input').focus();
+  if(e.key==='Escape'){
+    selectedBuilding=null;removeGhost();renderBuildMenu();
+    document.getElementById('chat-input').blur(); // unfocus chat
+  }
+  // Enter to focus/unfocus chat
+  if(e.key==='Enter') {
+    const chatInput = document.getElementById('chat-input');
+    if(document.activeElement === chatInput) {
+      // Send message if there's text, then blur
+      if(chatInput.value.trim()) {
+        document.getElementById('chat-send').click();
+      }
+      chatInput.blur();
+    } else {
+      chatInput.focus();
+    }
+    e.preventDefault();
   }
   const n = parseInt(e.key);
   if(n>=1 && n<=9) {
