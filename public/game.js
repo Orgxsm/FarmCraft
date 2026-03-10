@@ -983,14 +983,15 @@ function renderBuildMenu() {
   menu.innerHTML = '';
   const icons = {wood:'🪵',stone:'🪨',water:'💧',food:'🌾',energy:'⚡',gold:'🪙',data:'📊'};
   for (const [key, b] of Object.entries(serverBuildings)) {
-    const isBuilt = myBuildings[key]?.built;
+    const count = Object.values(myBuildings).filter(bb => bb.type === key && bb.built).length;
     const isUnlocked = unlockedBuildings.includes(key);
     const btn = document.createElement('div');
-    btn.className = 'build-btn' + (isBuilt?' built':!isUnlocked?' locked':'') + (selectedBuilding===key?' active':'');
+    btn.className = 'build-btn' + (!isUnlocked?' locked':'') + (selectedBuilding===key?' active':'');
     if (b.category==='tech') btn.classList.add('iot-btn');
     const costStr = Object.entries(b.cost).map(([r,v])=>`${icons[r]||''}${v}`).join(' ');
-    btn.innerHTML = `<div class="b-icon">${b.icon}</div><div class="b-name">${b.name}</div><div class="b-cost">${isBuilt?'✓':costStr}</div>`;
-    if (!isBuilt && isUnlocked) {
+    const countBadge = count > 0 ? `<span style="font-size:10px;opacity:0.7"> x${count}</span>` : '';
+    btn.innerHTML = `<div class="b-icon">${b.icon}</div><div class="b-name">${b.name}${countBadge}</div><div class="b-cost">${costStr}</div>`;
+    if (isUnlocked) {
       btn.addEventListener('click', () => {
         selectedBuilding = selectedBuilding===key ? null : key;
         if(selectedBuilding) showGhostForKey(key); else removeGhost();
@@ -1455,12 +1456,13 @@ socket.on('joined', (data) => {
 
     // Restore own buildings if session was restored
     if(data.restored && myPlayer.buildings) {
-      for(const [key, bdata] of Object.entries(myPlayer.buildings)) {
-        if(bdata.built && buildingCreators[key]) {
+      for(const [bid, bdata] of Object.entries(myPlayer.buildings)) {
+        const btype = bdata.type || bid; // backwards compat
+        if(bdata.built && buildingCreators[btype]) {
           const pos = new THREE.Vector3(bdata.x, getY(bdata.x, bdata.z), bdata.z);
-          const mesh = buildingCreators[key](pos);
+          const mesh = buildingCreators[btype](pos);
           addOwnerBanner(mesh, myPlayer.name, myPlayer.color);
-          localBuiltMeshes[key] = mesh;
+          localBuiltMeshes[bid] = mesh;
         }
       }
       myBuildings = { ...myPlayer.buildings };
@@ -1551,15 +1553,16 @@ socket.on('buildingPlaced', (data) => {
   // Add owner banner
   addOwnerBanner(mesh, data.playerName, data.playerColor);
 
+  const bid = data.buildingId || data.key;
   if(data.playerId === myPlayerId) {
-    localBuiltMeshes[data.key] = mesh;
-    myBuildings[data.key] = { built:true, x:data.x, z:data.z };
+    localBuiltMeshes[bid] = mesh;
+    myBuildings[bid] = { type:data.key, built:true, x:data.x, z:data.z };
     selectedBuilding = null;
     removeGhost();
     showMessage(`${data.building.name} construit!`, '#4CAF50');
     renderBuildMenu();
   } else {
-    otherBuiltMeshes[`${data.playerId}_${data.key}`] = mesh;
+    otherBuiltMeshes[`${data.playerId}_${bid}`] = mesh;
     showMessage(`${data.playerName} a construit ${data.building.name}!`, data.playerColor);
   }
 });
@@ -1671,12 +1674,13 @@ function addOtherPlayer(id, data) {
 
   // Place existing buildings from this player
   if(data.buildings) {
-    for(const [key, bdata] of Object.entries(data.buildings)) {
-      if(bdata.built) {
+    for(const [bid, bdata] of Object.entries(data.buildings)) {
+      const btype = bdata.type || bid; // backwards compat
+      if(bdata.built && buildingCreators[btype]) {
         const pos = new THREE.Vector3(bdata.x, getY(bdata.x, bdata.z), bdata.z);
-        const mesh = buildingCreators[key](pos);
+        const mesh = buildingCreators[btype](pos);
         addOwnerBanner(mesh, data.name, data.color);
-        otherBuiltMeshes[`${id}_${key}`] = mesh;
+        otherBuiltMeshes[`${id}_${bid}`] = mesh;
       }
     }
   }
@@ -1820,7 +1824,7 @@ window.addEventListener('keydown', (e) => {
     const keys = Object.keys(serverBuildings);
     if(n<=keys.length) {
       const k = keys[n-1];
-      if(unlockedBuildings.includes(k) && !myBuildings[k]?.built) {
+      if(unlockedBuildings.includes(k)) {
         selectedBuilding = k;
         showGhostForKey(k);
         renderBuildMenu();

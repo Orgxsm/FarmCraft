@@ -79,7 +79,8 @@ function createPlayerState(id, name, spawnIndex) {
     spawnIndex,
     spawn,
     resources: { wood: 0, stone: 0, water: 0, food: 0, energy: 0, gold: 0, data: 0 },
-    buildings: {}, // key -> {built, x, z, health}
+    buildings: {}, // buildingId -> {type, built, x, z, health}
+    buildingCounter: 0, // auto-increment for unique IDs
     unlockedBuildings: ['cabin'], // prerequisite chain
     installedSensors: {},
     unlockedTech: [],
@@ -175,10 +176,10 @@ function occupyCells(x, z, sizeX, sizeZ) {
 function runProduction() {
   for (const [pid, player] of Object.entries(world.players)) {
     const produced = {};
-    for (const [key, bdata] of Object.entries(player.buildings)) {
+    for (const [bid, bdata] of Object.entries(player.buildings)) {
       if (!bdata.built) continue;
-      const bdef = BUILDINGS[key];
-      if (!bdef.production) continue;
+      const bdef = BUILDINGS[bdata.type];
+      if (!bdef || !bdef.production) continue;
 
       // Health check
       if (bdata.health < 30) continue;
@@ -254,9 +255,10 @@ io.on('connection', (socket) => {
       // Clear expiry timer
       if (sessionTimers[name]) { clearTimeout(sessionTimers[name]); delete sessionTimers[name]; }
       // Re-occupy cells for restored buildings
-      for (const [key, bdata] of Object.entries(player.buildings)) {
+      for (const [bid, bdata] of Object.entries(player.buildings)) {
         if (bdata.built) {
-          const bdef = BUILDINGS[key];
+          const bdef = BUILDINGS[bdata.type];
+          if (!bdef) continue;
           const cells = getBuildingCells(bdata.x, bdata.z, bdef.size[0], bdef.size[1]);
           cells.forEach(c => world.occupiedCells.add(c));
         }
@@ -322,8 +324,7 @@ io.on('connection', (socket) => {
     const bdef = BUILDINGS[key];
     if (!bdef) return;
 
-    // Validate: not already built, unlocked, can afford, can place
-    if (player.buildings[key]?.built) return;
+    // Validate: unlocked, can afford, can place
     if (!player.unlockedBuildings.includes(key)) return;
 
     for (const [r, v] of Object.entries(bdef.cost)) {
@@ -345,11 +346,12 @@ io.on('connection', (socket) => {
       player.resources[r] -= v;
     }
 
-    // Place building
+    // Place building with unique ID
+    const buildingId = `${key}_${player.buildingCounter++}`;
     occupyCells(sx, sz, bdef.size[0], bdef.size[1]);
-    player.buildings[key] = { built: true, x: sx, z: sz, health: 100 };
+    player.buildings[buildingId] = { type: key, built: true, x: sx, z: sz, health: 100 };
 
-    // Unlock next buildings
+    // Unlock next buildings (first time building this type)
     for (const [bk, bd] of Object.entries(BUILDINGS)) {
       if (bd.prerequisite === key && !player.unlockedBuildings.includes(bk)) {
         player.unlockedBuildings.push(bk);
@@ -365,14 +367,17 @@ io.on('connection', (socket) => {
       playerName: player.name,
       playerColor: player.color,
       key,
+      buildingId,
       x: sx, z: sz,
       building: bdef
     });
 
-    console.log(`${player.name} built ${bdef.name} at (${sx}, ${sz})`);
+    console.log(`${player.name} built ${bdef.name} (${buildingId}) at (${sx}, ${sz})`);
 
-    // Check win condition
-    const allBuilt = Object.keys(BUILDINGS).every(k => player.buildings[k]?.built);
+    // Check win condition: at least one of each type
+    const allBuilt = Object.keys(BUILDINGS).every(k =>
+      Object.values(player.buildings).some(b => b.type === k && b.built)
+    );
     if (allBuilt) {
       io.emit('playerWon', { playerId: socket.id, playerName: player.name });
     }
@@ -382,7 +387,7 @@ io.on('connection', (socket) => {
   socket.on('repair', (data) => {
     const player = world.players[socket.id];
     if (!player) return;
-    const b = player.buildings[data.key];
+    const b = player.buildings[data.buildingId || data.key];
     if (!b || !b.built) return;
 
     const cost = Math.ceil((100 - b.health) * 0.1);
@@ -431,9 +436,10 @@ io.on('connection', (socket) => {
     if (player) {
       console.log(`${player.name} disconnected — session saved for 30min`);
       // Free occupied cells temporarily
-      for (const [key, bdata] of Object.entries(player.buildings)) {
+      for (const [bid, bdata] of Object.entries(player.buildings)) {
         if (bdata.built) {
-          const bdef = BUILDINGS[key];
+          const bdef = BUILDINGS[bdata.type];
+          if (!bdef) continue;
           const cells = getBuildingCells(bdata.x, bdata.z, bdef.size[0], bdef.size[1]);
           cells.forEach(c => world.occupiedCells.delete(c));
         }
