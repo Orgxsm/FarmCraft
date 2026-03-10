@@ -5,7 +5,13 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: { origin: '*' },
+  transports: ['polling', 'websocket'],
+  allowUpgrades: true,
+  pingTimeout: 30000,
+  pingInterval: 25000
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -59,6 +65,11 @@ const SPAWN_POINTS = [
   { x: -60, z: 0 }
 ];
 
+// Saved sessions: name -> player state (persists across disconnects)
+const savedSessions = {};
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 min before session expires
+const sessionTimers = {};
+
 function createPlayerState(id, name, spawnIndex) {
   const spawn = SPAWN_POINTS[spawnIndex % SPAWN_POINTS.length];
   return {
@@ -73,7 +84,8 @@ function createPlayerState(id, name, spawnIndex) {
     installedSensors: {},
     unlockedTech: [],
     productionTimers: {},
-    cameraPos: { x: spawn.x, z: spawn.z }
+    position: { x: spawn.x, z: spawn.z },
+    rotation: 0
   };
 }
 
@@ -225,12 +237,41 @@ io.on('connection', (socket) => {
 
   // ─── JOIN ───
   socket.on('join', (data) => {
+    // Prevent double-join
+    if (world.players[socket.id]) {
+      console.log(`${world.players[socket.id].name} tried to join again, ignoring`);
+      return;
+    }
     const name = (data.name || '').trim().substring(0, 16) || `Joueur ${playerCount + 1}`;
-    const spawnIndex = playerCount;
-    const player = createPlayerState(socket.id, name, spawnIndex);
+    let player;
+    let restored = false;
+
+    // Check for saved session
+    if (savedSessions[name]) {
+      player = savedSessions[name];
+      player.id = socket.id; // Update socket id
+      delete savedSessions[name];
+      // Clear expiry timer
+      if (sessionTimers[name]) { clearTimeout(sessionTimers[name]); delete sessionTimers[name]; }
+      // Re-occupy cells for restored buildings
+      for (const [key, bdata] of Object.entries(player.buildings)) {
+        if (bdata.built) {
+          const bdef = BUILDINGS[key];
+          const cells = getBuildingCells(bdata.x, bdata.z, bdef.size[0], bdef.size[1]);
+          cells.forEach(c => world.occupiedCells.add(c));
+        }
+      }
+      restored = true;
+      console.log(`${name} restored session (spawn ${player.spawnIndex})`);
+    } else {
+      const spawnIndex = playerCount;
+      player = createPlayerState(socket.id, name, spawnIndex);
+      console.log(`${name} joined at spawn ${spawnIndex}`);
+    }
+
     world.players[socket.id] = player;
 
-    // Send full world state to new player
+    // Send full world state to player
     socket.emit('joined', {
       playerId: socket.id,
       player,
@@ -238,12 +279,12 @@ io.on('connection', (socket) => {
       harvestables: world.harvestables,
       mapSize: MAP_SIZE,
       gridSize: GRID_SIZE,
-      buildings: BUILDINGS
+      buildings: BUILDINGS,
+      restored
     });
 
     // Notify others
     socket.broadcast.emit('playerJoined', getPlayerPublic(socket.id));
-    console.log(`${name} joined at spawn ${spawnIndex}`);
   });
 
   // ─── HARVEST ───
@@ -356,12 +397,23 @@ io.on('connection', (socket) => {
     socket.emit('buildingRepaired', { key: data.key, health: 100 });
   });
 
-  // ─── CAMERA POSITION (for showing other players) ───
-  socket.on('cameraMove', (data) => {
+  // ─── PLAYER MOVEMENT ───
+  socket.on('playerMove', (data) => {
     const player = world.players[socket.id];
     if (!player) return;
-    player.cameraPos = { x: data.x, z: data.z };
-    socket.broadcast.emit('playerMoved', { playerId: socket.id, x: data.x, z: data.z });
+    const half = MAP_SIZE / 2 - 3;
+    player.position = {
+      x: Math.max(-half, Math.min(half, data.x || 0)),
+      z: Math.max(-half, Math.min(half, data.z || 0))
+    };
+    player.rotation = data.rot || 0;
+    socket.broadcast.emit('playerMoved', {
+      playerId: socket.id,
+      x: player.position.x,
+      z: player.position.z,
+      rot: player.rotation,
+      moving: data.moving || false
+    });
   });
 
   // ─── CHAT ───
@@ -377,8 +429,8 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     const player = world.players[socket.id];
     if (player) {
-      console.log(`${player.name} disconnected`);
-      // Free occupied cells from this player's buildings
+      console.log(`${player.name} disconnected — session saved for 30min`);
+      // Free occupied cells temporarily
       for (const [key, bdata] of Object.entries(player.buildings)) {
         if (bdata.built) {
           const bdef = BUILDINGS[key];
@@ -386,6 +438,16 @@ io.on('connection', (socket) => {
           cells.forEach(c => world.occupiedCells.delete(c));
         }
       }
+      // Save session by player name
+      savedSessions[player.name] = { ...player };
+      // Set expiry timer
+      if (sessionTimers[player.name]) clearTimeout(sessionTimers[player.name]);
+      sessionTimers[player.name] = setTimeout(() => {
+        delete savedSessions[player.name];
+        delete sessionTimers[player.name];
+        console.log(`Session expired for ${player.name}`);
+      }, SESSION_TIMEOUT);
+
       delete world.players[socket.id];
       io.emit('playerLeft', { playerId: socket.id, playerName: player.name });
     }
@@ -404,7 +466,8 @@ function getPlayerPublic(id) {
     color: p.color,
     spawn: p.spawn,
     buildings: p.buildings,
-    cameraPos: p.cameraPos
+    position: p.position,
+    rotation: p.rotation
   };
 }
 
@@ -422,7 +485,7 @@ function getPlayersPublic() {
 spawnHarvestables();
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`SmartFarm Multiplayer server running on port ${PORT}`);
   console.log(`Map size: ${MAP_SIZE}x${MAP_SIZE}, Max players: ${MAX_PLAYERS}`);
 });
